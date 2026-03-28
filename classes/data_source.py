@@ -76,7 +76,9 @@ class Stats(Data):
 
         # Here we get opposite value of metrics if their weight is negative
         for metric in set(self.negative_metrics).intersection(self.metrics):
-            df_z[metric] = df_z[metric] * -1
+            col_z = f"{metric}_Z"
+            if col_z in df_z.columns:
+                df_z[col_z] = df_z[col_z] * -1
         return df_z
 
     def get_ranks(self, df):
@@ -158,6 +160,146 @@ class PlayerStats(Stats):
             position=position,
             ser_metrics=ser_metrics,
             relevant_metrics=self.metrics,
+        )
+
+
+class PressingStats(Stats):
+    """
+    Team-level pressing data (default: data/pressing/pressing_summary_metrics_new.csv).
+
+    Columns are league z-scores per team (not raw counts). Composite: score; pre-scale
+    sum: z_q_raw (excluded from strip). danger, beaten: lower z = better (inverted).
+    ppda (hb) is not inverted (higher σ ranks better on the strip). Values are used as
+    _Z directly (no re-z-scoring within the table). Legacy CSV (pressing_league_table.csv)
+    still works: raw metrics
+    are z-scored in calculate_statistics.
+    """
+
+    data_point_class = data_point.PressingTeam
+    PRESSING_CSV_PATH = "data/pressing/pressing_summary_metrics_new.csv"
+    METRIC_COLUMN_EXCLUDE = frozenset({"Team", "Label", "Z_q raw", "z_q_raw"})
+    PRESSING_NEGATIVE_METRICS = [
+        "Bypass %",
+        "Danger %",
+        "Beaten %",
+        "PPDA",
+        "PPDA (HB)",
+        "danger",
+        "beaten",
+    ]
+
+    def get_raw_data(self):
+        return pd.read_csv(self.PRESSING_CSV_PATH, encoding="utf-8")
+
+    def process_data(self, df_raw):
+        rename = {}
+        if "team" in df_raw.columns and "Team" not in df_raw.columns:
+            rename["team"] = "Team"
+        if "score" in df_raw.columns and "Score" not in df_raw.columns:
+            rename["score"] = "Score"
+        if "z_q_raw" in df_raw.columns and "Z_q raw" not in df_raw.columns:
+            rename["z_q_raw"] = "Z_q raw"
+        if rename:
+            df_raw = df_raw.rename(columns=rename)
+        if "Team" not in df_raw.columns:
+            raise ValueError("Missing Team column (expected Team or team)")
+        if df_raw["Team"].isnull().values.any():
+            raise ValueError("Team column contains NaN values")
+        if (df_raw["Team"].astype(str).str.strip() == "").any():
+            raise ValueError("Team column contains empty strings")
+        if df_raw["Team"].duplicated().any():
+            raise ValueError("Team column contains duplicates")
+        if len(df_raw) < 10:
+            raise Exception("Not enough data points")
+        return df_raw
+
+    def _metrics_are_league_zscores(self, metrics):
+        """New summary file: all metric columns are already σ vs league."""
+        sample = set(metrics) - {"Score", "Z_q"}
+        return bool(sample) and sample.issubset(
+            {
+                "recovery",
+                "force long ball",
+                "xt disruption",
+                "lead to shot",
+                "danger",
+                "beaten",
+                "ppda (hb)",
+            }
+        )
+
+    def calculate_statistics(self, metrics, negative_metrics=[]):
+        self.metrics = metrics
+        self.negative_metrics = negative_metrics
+        df = self.df
+        if self._metrics_are_league_zscores(metrics):
+            df_z = df[metrics].copy()
+            neg = set(negative_metrics).intersection(metrics)
+            for m in neg:
+                df_z[m] = df_z[m] * -1
+            df_z.columns = [f"{c}_Z" for c in metrics]
+            df_for_rank = df[metrics].copy()
+            for m in neg:
+                df_for_rank[m] = df_for_rank[m] * -1
+            df_ranks = df_for_rank.rank(ascending=False)
+            df_ranks.columns = [f"{c}_Ranks" for c in metrics]
+            self.df = pd.concat([df, df_z, df_ranks], axis=1)
+            return
+        super().calculate_statistics(metrics, negative_metrics=negative_metrics)
+
+    @staticmethod
+    def metric_columns(df):
+        """Numeric columns used for z-scores and ranks."""
+        exclude = PressingStats.METRIC_COLUMN_EXCLUDE
+        out = []
+        for col in df.columns:
+            if col in exclude:
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                out.append(col)
+                continue
+            coerced = pd.to_numeric(df[col], errors="coerce")
+            if coerced.notna().all():
+                out.append(col)
+        return out
+
+    @classmethod
+    def negative_metrics_for_columns(cls, metric_cols):
+        return [m for m in cls.PRESSING_NEGATIVE_METRICS if m in metric_cols]
+
+    def to_data_point(self) -> data_point.PressingTeam:
+        id = self.df.index[0]
+        self.df.reset_index(drop=True, inplace=True)
+
+        name = self.df["Team"][0]
+        pressing_score = None
+        pressing_score_is_zq = False
+        pressing_label = None
+        if "Score" in self.df.columns:
+            pressing_score = float(self.df["Score"].iloc[0])
+            pressing_score_is_zq = True
+        elif "Z_q" in self.df.columns:
+            pressing_score = float(self.df["Z_q"].iloc[0])
+            pressing_score_is_zq = True
+        if "Label" in self.df.columns:
+            pressing_label = str(self.df["Label"].iloc[0])
+
+        drop_cols = [
+            c
+            for c in ("Team", "Label", "Z_q raw", "z_q_raw")
+            if c in self.df.columns
+        ]
+        self.df = self.df.drop(columns=drop_cols)
+        ser_metrics = self.df.squeeze()
+
+        return self.data_point_class(
+            id=id,
+            name=name,
+            ser_metrics=ser_metrics,
+            relevant_metrics=self.metrics,
+            pressing_score=pressing_score,
+            pressing_label=pressing_label,
+            pressing_score_is_zq=pressing_score_is_zq,
         )
 
 

@@ -23,6 +23,7 @@ from classes.description import (
     PlayerDescription,
     CountryDescription,
     PersonDescription,
+    PressingDescription,
 )
 from classes.embeddings import PlayerEmbeddings, CountryEmbeddings, PersonEmbeddings
 
@@ -49,6 +50,8 @@ class Chat:
             self.name = self.player.name
         elif isinstance(self, PersonChat):
             self.name = self.person.name
+        elif isinstance(self, PressingChat):
+            self.name = self.team.name
         else:
             pass
 
@@ -317,6 +320,51 @@ class PlayerChat(Chat):
         ret_val += "This chat can answer questions about a player's statistics and what they mean for how they play football."
         ret_val += "The user can select the player they are interested in using the menu to the left."
 
+        return ret_val
+
+
+class PressingChat(Chat):
+    def __init__(self, chat_state_hash, team, pressing, state="empty"):
+        self.team = team
+        self.pressing = pressing
+        super().__init__(chat_state_hash, state=state)
+
+    def get_input(self):
+        if x := st.chat_input(
+            placeholder=f"What else would you like to know about {self.team.name}'s pressing?"
+        ):
+            if len(x) > 500:
+                st.error(
+                    f"Your message is too long ({len(x)} characters). Please keep it under 500 characters."
+                )
+
+            self.handle_input(x, stream=True)
+
+    def instruction_messages(self):
+        return [
+            {"role": "system", "content": "You are a UK-based football analyst."},
+            {
+                "role": "user",
+                "content": (
+                    "After these messages you will be interacting with a user of a football analytics platform. "
+                    f"The user has selected the team {self.team.name}, and the conversation will be about their pressing. "
+                    "You will receive relevant information to answer a user's questions and then be asked to provide a response. "
+                    "All user messages will be prefixed with 'User:' and enclosed with ```. "
+                    "When responding to the user, speak directly to them. "
+                    "Use the information provided before the query to provide 2 sentence answers. "
+                    "Do not deviate from this information or provide additional information that is not in the text returned by the functions."
+                ),
+            },
+        ]
+
+    def get_relevant_info(self, query):
+        ret_val = "Here is a description of the team in terms of pressing data: \n\n"
+        description = PressingDescription(self.team)
+        ret_val += description.synthesize_text()
+        ret_val += (
+            "\n\nIf none of this information is relevant to the user's query, remind them that this chat "
+            "is about team pressing statistics versus the league. The user can select another team from the menu on the left."
+        )
         return ret_val
 
 

@@ -149,6 +149,21 @@ def select_country(container, countries):
     return country
 
 
+def select_team(container, pressing):
+
+    team_stats = copy.deepcopy(pressing)
+
+    with container:
+        team_stats.select_and_filter(
+            column_name="Team",
+            label="Team",
+        )
+
+        team = team_stats.to_data_point()
+
+    return team
+
+
 def create_chat(to_hash, chat_class, *args, **kwargs):
     chat_hash_state = hash(to_hash)
     chat = chat_class(chat_hash_state, *args, **kwargs)

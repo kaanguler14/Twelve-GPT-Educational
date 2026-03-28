@@ -9,7 +9,7 @@ from openai import OpenAI
 import utils.sentences as sentences
 from utils.gemini import convert_messages_format
 
-from classes.data_point import Player, Country, Person
+from classes.data_point import Player, Country, Person, PressingTeam
 from classes.data_source import PersonStat
 
 import json
@@ -342,6 +342,86 @@ class PlayerDescription(Description):
             "The second sentence should describe the player's specific strengths based on the metrics. "
             "The third sentence should describe aspects in which the player is average and/or weak based on the statistics. "
             "Finally, summarise exactly how the player compares to others in the same position. "
+        )
+        return [{"role": "user", "content": prompt}]
+
+
+class PressingDescription(Description):
+    output_token_limit = 150
+
+    @property
+    def gpt_examples_path(self):
+        return f"{self.gpt_examples_base}/Pressing.xlsx"
+
+    @property
+    def describe_paths(self):
+        return [f"{self.describe_base}/Pressing.xlsx"]
+
+    def __init__(self, team: PressingTeam):
+        self.team = team
+        super().__init__()
+
+    def get_intro_messages(self) -> List[Dict[str, str]]:
+        intro = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a UK-based football analyst. "
+                    "You provide succinct explanations about team pressing and defensive intensity using data. "
+                    "You use the statistical description and earlier Q&A pairs to summarise teams."
+                ),
+            },
+            {
+                "role": "user",
+                "content": "Do you refer to the game as soccer or football?",
+            },
+            {
+                "role": "assistant",
+                "content": (
+                    "I refer to the game as football. "
+                    "When I say football, I mean association football, not American football."
+                ),
+            },
+        ]
+        if len(self.describe_paths) > 0:
+            intro += [
+                {
+                    "role": "user",
+                    "content": "First, could you answer some questions about pressing metrics for me?",
+                },
+                {"role": "assistant", "content": "Sure!"},
+            ]
+
+        return intro
+
+    def synthesize_text(self) -> str:
+        team = self.team
+        metrics = team.relevant_metrics
+        description = (
+            f"Here is a statistical description of how {team.name} presses compared to other teams in the league. "
+            "The lines below use plain language only — do not repeat technical metric names or abbreviations from a data dictionary. \n\n"
+        )
+
+        for metric in metrics:
+            z_key = metric + "_Z"
+            if z_key not in team.ser_metrics.index:
+                continue
+            description += "The team was "
+            description += sentences.describe_level(float(team.ser_metrics[z_key]))
+            description += " "
+            description += sentences.pressing_metric_natural_clause(metric)
+            description += " compared to other teams in the league. "
+
+        return description
+
+    def get_prompt_messages(self):
+        prompt = (
+            "Please use the statistical description enclosed with ``` to give a concise, 4 sentence summary of the team's pressing style, strengths and weaknesses. "
+            "Do not use raw metric names, acronyms, or column titles — only everyday football language. "
+            "The first sentence should give an overview of how aggressively this team presses relative to the league. "
+            "The second sentence should describe specific strengths. "
+            "The third sentence should describe areas where the team is average or weak. "
+            "Finally, summarise how the team compares to the rest of the league overall."
         )
         return [{"role": "user", "content": prompt}]
 

@@ -6,8 +6,8 @@ import pandas as pd
 
 
 from utils.sentences import format_metric
-from classes.data_point import Player, Country, Person
-from classes.data_source import PlayerStats, CountryStats, PersonStat
+from classes.data_point import Player, Country, Person, PressingTeam
+from classes.data_source import PlayerStats, CountryStats, PersonStat, PressingStats
 from typing import Union
 
 
@@ -167,6 +167,8 @@ class Visual:
 
 class DistributionPlot(Visual):
     def __init__(self, columns, labels=None, *args, **kwargs):
+        # Pop before super() — Visual must not receive unknown kwargs
+        self._plot_height = kwargs.pop("plot_height", None)
         self.empty = True
         self.columns = columns
         self.marker_color = (
@@ -174,6 +176,11 @@ class DistributionPlot(Visual):
         )
         self.marker_shape = (s for s in ["square", "hexagon", "diamond"])
         super().__init__(*args, **kwargs)
+        if self._plot_height is not None:
+            self.fig.update_layout(
+                height=int(self._plot_height),
+                margin=dict(l=60, r=56, b=96, t=80, pad=14),
+            )
         if labels is not None:
             self._setup_axes(labels)
         else:
@@ -194,10 +201,12 @@ class DistributionPlot(Visual):
             zerolinecolor=rgb_to_color(self.medium_green),
         )
 
-        # Add a vertical line at x=0
         self.fig.add_shape(
             type="line",
-            x0=0, y0=0, x1=0, y1=len(self.columns),
+            x0=0,
+            y0=0,
+            x1=0,
+            y1=len(self.columns),
             line=dict(color="gray", width=1, dash="dot"),
         )
 
@@ -206,7 +215,7 @@ class DistributionPlot(Visual):
         for i, col in enumerate(self.columns):
             self.fig.add_trace(
                 go.Scatter(
-                    x=df_plot[col + plots].tolist(), 
+                    x=df_plot[col + plots].tolist(),
                     y=list(np.ones(len(df_plot[col + plots])) * i),
                     mode="markers",
                     marker={
@@ -221,7 +230,6 @@ class DistributionPlot(Visual):
                     showlegend=False,
                 )
             )
-            
 
     def add_data_point(
         self, ser_plot, plots, name, hover="", hover_string="", text=None
@@ -260,16 +268,13 @@ class DistributionPlot(Visual):
             )
             legend = False
 
+            # Same layout as Football Scout / WVS: label at x=0, y=i+0.4, raw value in text
             self.fig.add_annotation(
                 x=0,
                 y=i + 0.4,
                 text=self.annotation_text.format(
                     metric_name=metric_name,
-                    data=(
-                        ser_plot[col]
-                        # if self.plot_type == "scout"
-                        # else ser_plot[col + hover]
-                    ),
+                    data=ser_plot[col],
                 ),
                 showarrow=False,
                 font={
@@ -279,8 +284,7 @@ class DistributionPlot(Visual):
                 },
             )
 
-
-    def add_player(self, player: Union[Player, Country], n_group, metrics):
+    def add_player(self, player: Union[Player, Country, PressingTeam], n_group, metrics):
 
         # # Make list of all metrics with _Z and _Rank added at end
         metrics_Z = [metric + "_Z" for metric in metrics]
@@ -295,8 +299,13 @@ class DistributionPlot(Visual):
                 player.ser_metrics
             )  # Assuming countries have a similar metric structure
             name = player.name
+        elif isinstance(player, PressingTeam):
+            ser_plot = player.ser_metrics
+            name = player.name
         else:
-            raise TypeError("Invalid player type: expected Player or Country")
+            raise TypeError(
+                "Invalid player type: expected Player, Country, or PressingTeam"
+            )
 
         self.add_data_point(
             ser_plot=ser_plot,
@@ -321,7 +330,9 @@ class DistributionPlot(Visual):
     #         legend=f"Other players  ",  # space at end is important
     #     )
 
-    def add_players(self, players: Union[PlayerStats, CountryStats], metrics):
+    def add_players(
+        self, players: Union[PlayerStats, CountryStats, PressingStats], metrics
+    ):
 
         # Make list of all metrics with _Z and _Rank added at end
         metrics_Z = [metric + "_Z" for metric in metrics]
@@ -345,8 +356,19 @@ class DistributionPlot(Visual):
                 hover_string="Rank: %{customdata}/" + str(len(players.df)),
                 legend=f"Other countries  ",  # space at end is important
             )
+        elif isinstance(players, PressingStats):
+            self.add_group_data(
+                df_plot=players.df,
+                plots="_Z",
+                names=players.df["Team"],
+                hover="_Ranks",
+                hover_string="Rank: %{customdata}/" + str(len(players.df)),
+                legend=f"Other teams  ",
+            )
         else:
-            raise TypeError("Invalid player type: expected Player or Country")
+            raise TypeError(
+                "Invalid player type: expected PlayerStats, CountryStats, or PressingStats"
+            )
 
     # def add_title_from_player(self, player: Player):
     #     self.player = player
@@ -356,7 +378,7 @@ class DistributionPlot(Visual):
 
     #     self.add_title(title, subtitle)
 
-    def add_title_from_player(self, player: Union[Player, Country]):
+    def add_title_from_player(self, player: Union[Player, Country, PressingTeam]):
         self.player = player
 
         title = f"Evaluation of {player.name}?"
@@ -364,10 +386,31 @@ class DistributionPlot(Visual):
             subtitle = f"Based on {player.minutes_played} minutes played"
         elif isinstance(player, Country):
             subtitle = f"Based on questions answered in the World Values Survey"
+        elif isinstance(player, PressingTeam):
+            title = f"Pressing profile: {player.name}"
+            parts = []
+            if player.pressing_label:
+                parts.append(f"style: {player.pressing_label}")
+            subtitle = (
+                " — ".join(parts) + " (vs league reference set)"
+                if parts
+                else "Team pressing metrics vs league reference set"
+            )
         else:
-            raise TypeError("Invalid player type: expected Player or Country")
+            raise TypeError(
+                "Invalid player type: expected Player, Country, or PressingTeam"
+            )
 
         self.add_title(title, subtitle)
+
+    def show(self):
+        h = int(self._plot_height) if self._plot_height is not None else 500
+        st.plotly_chart(
+            self.fig,
+            config={"displayModeBar": False},
+            height=h,
+            use_container_width=True,
+        )
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------

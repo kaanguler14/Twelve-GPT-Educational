@@ -46,6 +46,28 @@ class Country(Stat):
         self.drill_down_metrics = drill_down_metrics
 
 
+class PressingTeam(Stat):
+    """Team-level pressing metrics (no WVS drill-down)."""
+
+    def __init__(
+        self,
+        id,
+        name,
+        ser_metrics,
+        relevant_metrics,
+        pressing_score=None,
+        pressing_label=None,
+        pressing_score_is_zq=False,
+    ):
+        self.id = id
+        self.name = name
+        self.relevant_metrics = relevant_metrics
+        self.ser_metrics = ser_metrics
+        self.pressing_score = pressing_score
+        self.pressing_label = pressing_label
+        self.pressing_score_is_zq = pressing_score_is_zq
+
+
 class Person(Stat):
 
     def __init__(self, id, name, ser_metrics):
