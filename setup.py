@@ -8,6 +8,7 @@ setup(
         "streamlit",
         "pandas",
         "tiktoken",
+        "scipy",
         # TODO: this is not a complete list
     ],
 )

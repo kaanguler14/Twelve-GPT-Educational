@@ -82,7 +82,12 @@ class Stats(Data):
         return df_z
 
     def get_ranks(self, df):
-        df_ranks = df.rank(ascending=False)
+        df_ranks = df.copy()
+        for col in df_ranks.columns:
+            if col in self.negative_metrics:
+                df_ranks[col] = df_ranks[col].rank(ascending=True)
+            else:
+                df_ranks[col] = df_ranks[col].rank(ascending=False)
 
         # Rename every column to include "Ranks" at the end
         df_ranks.columns = [f"{col}_Ranks" for col in df_ranks.columns]
@@ -188,8 +193,12 @@ class PressingStats(Stats):
         "beaten",
     ]
 
+    def __init__(self, csv_path=None):
+        self.csv_path = csv_path or self.PRESSING_CSV_PATH
+        super().__init__()
+
     def get_raw_data(self):
-        return pd.read_csv(self.PRESSING_CSV_PATH, encoding="utf-8")
+        return pd.read_csv(self.csv_path, encoding="utf-8")
 
     def process_data(self, df_raw):
         rename = {}

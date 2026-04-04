@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Card - Pressing Analyst</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+        .metric-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .metric-table th, .metric-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .metric-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .metric-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .highlight {
+            background-color: #e8f4fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .toc {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .toc ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .toc li {
+            margin: 5px 0;
+        }
+        .toc a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Model Card for Pressing Analyst Wordalisation</h1>
+
+        <p>The Pressing Analyst is implemented within the <a href="https://github.com/soccermatics/twelve-gpt-educational">TwelveGPT Education framework</a> and is intended as an illustration of data-driven conversational AI methods. Here we detail the specific application to football team pressing analysis. It is thus intended as an example to help others building wordalisations for team performance analytics.</p>
+
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#intended-use">Intended Use</a></li>
+                <li><a href="#factors">Factors</a></li>
+                <li><a href="#datasets">Datasets</a></li>
+                <li><a href="#model">Model</a></li>
+                <li><a href="#metrics">Detailed Metrics</a></li>
+                <li><a href="#evaluation">Evaluation</a></li>
+                <li><a href="#ethical">Ethical Considerations</a></li>
+                <li><a href="#caveats">Caveats and Recommendations</a></li>
+            </ul>
+        </div>
+
+        <h2 id="intended-use">Intended Use</h2>
+        <p>The <strong>primary use case</strong> of this wordalisation is educational. It demonstrates how to convert team pressing statistics into natural language descriptions and enable conversational analysis. A <strong>secondary use case</strong> might be for users to understand team defensive pressing strategies in football analytics.</p>
+        <p><strong>Out of scope:</strong> Professional football scouting, real-time tactical analysis, or use with current season data. The chat functionality is limited to pressing-related queries only.</p>
+
+        <h2 id="factors">Factors</h2>
+        <p>The Pressing Analyst focuses on professional football teams in the Premier League. This version analyzes team-level pressing metrics rather than individual player performance. The demographic scope is limited to male professional athletes in elite European football. Team diversity reflects the global nature of the Premier League, with players and coaches from various nationalities and backgrounds.</p>
+
+        <h2 id="datasets">Datasets</h2>
+        <p>The analysis uses two primary data sources:</p>
+        <ol>
+            <li><strong>Summary Metrics:</strong> Pre-calculated league z-scores for pressing performance (<code>data/pressing/pressing_summary_metrics_new.csv</code>)</li>
+            <li><strong>Event Data:</strong> Detailed match events from Wyscout/StatsBomb format (<code>dataset/dynamic_events_pl_24/</code>)</li>
+        </ol>
+        <p>Data preprocessing involves normalizing coordinates, calculating per-match averages, and computing statistical transformations.</p>
+
+        <h2 id="model">Model</h2>
+
+        <h3>Quantitative Model</h3>
+        <p>The model processes team pressing data through several stages:</p>
+        <ol>
+            <li><strong>Data Loading:</strong> Reads CSV files and parquet event data</li>
+            <li><strong>Statistical Processing:</strong> Calculates z-scores, ranks, and percentile ranks</li>
+            <li><strong>Coordinate Normalization:</strong> Standardizes pitch coordinates for consistent analysis</li>
+            <li><strong>Metric Aggregation:</strong> Computes per-match averages from season totals</li>
+        </ol>
+
+        <h3>Normative Model</h3>
+        <p>The system applies football-specific norms where higher values indicate better performance for most metrics, except "negative metrics" like PPDA (lower is better). The LLM role is defined as a "UK-based football analyst" with expertise in pressing strategies.</p>
+
+        <div class="code-block">
+def describe_level(value):
+    thresholds = [1.5, 1, 0.5, -0.5, -1]
+    words = ["outstanding", "excellent", "good", "average", "below average", "poor"]
+    return describe(thresholds, words, value)
+        </div>
+
+        <h2 id="metrics">Detailed Metrics</h2>
+        <p>The Pressing Analyst calculates and displays the following per-match metrics:</p>
+
+        <table class="metric-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Description</th>
+                    <th>Formula</th>
+                    <th>Calculation Method</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>PPDA</strong><br>(Passes Per Defensive Action)</td>
+                    <td>Measure of pressing intensity - lower values indicate more aggressive pressing</td>
+                    <td>successful_opponent_passes / total_team_defensive_actions</td>
+                    <td>Scanned from all match events per team (successful passes only)</td>
+                </tr>
+                <tr>
+                    <td><strong>Chains</strong></td>
+                    <td>Pressing sequences created in opponent's half</td>
+                    <td>chains_created_in_opp_half / matches_played</td>
+                    <td>Count of pressing chain starts in opponent half</td>
+                </tr>
+                <tr>
+                    <td><strong>Force Long Ball</strong></td>
+                    <td>Opponent forced to play long/high passes during pressing</td>
+                    <td>forced_long_passes / matches_played</td>
+                    <td>Associated possession events classified as long/high passes</td>
+                </tr>
+                <tr>
+                    <td><strong>Recovery (Opp Half)</strong></td>
+                    <td>Ball regains in opponent's half</td>
+                    <td>regains_in_opp_half / matches_played</td>
+                    <td>Direct and indirect regains with x_norm > 0</td>
+                </tr>
+                <tr>
+                    <td><strong>xT Disruption</strong></td>
+                    <td>Expected threat reduction during pressing chains</td>
+                    <td>sum(xshot_start - xshot_end) / pressing_chains_created</td>
+                    <td>xShot difference per pressing chain</td>
+                </tr>
+                <tr>
+                    <td><strong>Press Broken</strong></td>
+                    <td>Pressing chains broken without regain</td>
+                    <td>broken_chains / matches_played</td>
+                    <td>Chains ending without regain/disruption</td>
+                </tr>
+                <tr>
+                    <td><strong>Lead to Shot After Broken</strong></td>
+                    <td>Opponent shots after breaking the press</td>
+                    <td>shots_after_broken_press / broken_chains</td>
+                    <td>Shots following broken pressing chains per broken chain</td>
+                </tr>
+                <tr>
+                    <td><strong>Pass Accuracy Under Pressure</strong></td>
+                    <td>Success rate of opponent passes made during pressing chains in opponent's half. Includes both successful and unsuccessful passes to avoid selection bias.</td>
+                    <td>successful_passes_during_press / total_pass_attempts_during_press</td>
+                    <td>Associated possession events during pressing chains in opponent's half (successful + unsuccessful + offside)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="highlight">
+            <h4>Key Calculation Scripts</h4>
+            <ul>
+                <li><strong>build_pressing_metrics.py:</strong> Computes all detailed metrics from raw event data</li>
+                <li><strong>pressing_analyst.py:</strong> Displays metrics and handles user interaction</li>
+                <li><strong>pressing_pitch.py:</strong> Generates pitch map visualizations</li>
+            </ul>
+        </div>
+
+        <h2 id="evaluation">Evaluation</h2>
+        <p>The model's performance is evaluated through:</p>
+        <ul>
+            <li><strong>Qualitative Assessment:</strong> Manual review of generated descriptions</li>
+            <li><strong>Offline Analysis:</strong> BLEU scores comparing LLM outputs to reference descriptions</li>
+            <li><strong>User Testing:</strong> Chat interaction quality and factual accuracy</li>
+        </ul>
+        <p>Evaluation scripts are located in the <code>evaluation/</code> directory and use ground truth datasets for comparison.</p>
+
+        <h2 id="ethical">Ethical Considerations</h2>
+        <p><strong>Data Privacy:</strong> Uses publicly available football statistics with no personal player data beyond team affiliations.</p>
+        <p><strong>Fair Representation:</strong> Metrics are calculated consistently across all teams without bias toward specific playing styles.</p>
+        <p><strong>Educational Use:</strong> Designed for learning purposes only, not for professional decision-making.</p>
+        <p><strong>Transparency:</strong> All calculations and data sources are openly documented in the codebase.</p>
+
+        <h2 id="caveats">Caveats and Recommendations</h2>
+
+        <div class="warning">
+            <h4>Important Limitations</h4>
+            <ul>
+                <li>Data is from historical seasons and may not reflect current team performance</li>
+                <li>Metrics depend on event data quality and classification accuracy</li>
+                <li>Pressing definitions may vary between data providers</li>
+                <li>Coordinate normalization assumes standard pitch dimensions</li>
+            </ul>
+        </div>
+
+        <h4>Recommendations for Use</h4>
+        <ul>
+            <li>Use for educational purposes and methodological understanding</li>
+            <li>Validate calculations against known team performances</li>
+            <li>Consider multiple metrics together rather than in isolation</li>
+            <li>Supplement with qualitative analysis for complete understanding</li>
+        </ul>
+
+        <h4>Future Improvements</h4>
+        <ul>
+            <li>Integration with real-time data sources</li>
+            <li>Player-level pressing analysis</li>
+            <li>Cross-season comparisons</li>
+            <li>Advanced machine learning for pattern recognition</li>
+        </ul>
+
+        <hr>
+        <p><em>This model card was generated for the Pressing Analyst component of the TwelveGPT Educational framework. For more information, visit the <a href="https://github.com/soccermatics/twelve-gpt-educational">project repository</a>.</em></p>
+    </div>
+</body>
+</html>

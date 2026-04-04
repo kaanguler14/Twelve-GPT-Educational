@@ -1,3 +1,6 @@
+import os
+
+import ast
 import pandas as pd
 from utils.embeddings_utils import get_embedding, cosine_similarity
 
@@ -29,6 +32,17 @@ class Embeddings:
 
         # An option for the future is to take the top from each dataframe, so we get a mixture of responses.
         df = self.df_dict
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        expected_dim = len(df.user_embedded.iloc[0])
+        if len(embedding) != expected_dim:
+            raise ValueError(
+                "Embedding dimension mismatch: "
+                f"query={len(embedding)} vs stored={expected_dim}. "
+                "Make sure your embedding model (GPT_EMBEDDINGS_MODEL / GEMINI_EMBEDDING_MODEL) "
+                "matches the one used to create the parquet file."
+            )
         df["similarities"] = df.user_embedded.apply(
             lambda x: cosine_similarity(x, embedding)
         )
@@ -81,7 +95,7 @@ class PlayerEmbeddings(Embeddings):
             df_temp = df_temp[
                 ["user", "assistant", "category", "user_embedded", "format"]
             ]
-            df_temp["user_embedded"] = df_temp.user_embedded.apply(eval).to_list()
+            df_temp["user_embedded"] = df_temp.user_embedded.apply(ast.literal_eval).to_list()
             df_embeddings = pd.concat([df_embeddings, df_temp], ignore_index=True)
 
         return df_embeddings
@@ -108,7 +122,7 @@ class CountryEmbeddings(Embeddings):
             df_temp = df_temp[
                 ["user", "assistant", "category", "user_embedded", "format"]
             ]
-            df_temp["user_embedded"] = df_temp.user_embedded.apply(eval).to_list()
+            df_temp["user_embedded"] = df_temp.user_embedded.apply(ast.literal_eval).to_list()
             df_embeddings = pd.concat([df_embeddings, df_temp], ignore_index=True)
 
         return df_embeddings
@@ -137,7 +151,25 @@ class PersonEmbeddings(Embeddings):
             df_temp = df_temp[
                 ["user", "assistant", "category", "user_embedded", "format"]
             ]
-            df_temp["user_embedded"] = df_temp.user_embedded.apply(eval).to_list()
+            df_temp["user_embedded"] = df_temp.user_embedded.apply(ast.literal_eval).to_list()
             df_embeddings = pd.concat([df_embeddings, df_temp], ignore_index=True)
 
         return df_embeddings
+
+
+class PressingEmbeddings(Embeddings):
+    def __init__(self):
+        self.df_dict = PressingEmbeddings.get_embeddings()
+
+    def get_embeddings():
+        path = "data/embeddings/Pressing_analyst.parquet"
+        df_temp = pd.read_parquet(path)
+        if "category" not in df_temp:
+            df_temp["category"] = None
+        if "format" not in df_temp:
+            df_temp["format"] = None
+        df_temp = df_temp[
+            ["user", "assistant", "category", "user_embedded", "format"]
+        ]
+        df_temp["user_embedded"] = df_temp.user_embedded.apply(ast.literal_eval).to_list()
+        return df_temp

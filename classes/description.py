@@ -8,6 +8,7 @@ from openai import OpenAI
 
 import utils.sentences as sentences
 from utils.gemini import convert_messages_format
+from utils.text import clean_mojibake
 
 from classes.data_point import Player, Country, Person, PressingTeam
 from classes.data_source import PersonStat
@@ -122,9 +123,12 @@ class Description(ABC):
             return []
 
         # Concatenate dfs read from paths
-        df = pd.read_excel(paths[0])
+        def _read(p):
+            return pd.read_csv(p) if p.endswith(".csv") else pd.read_excel(p)
+
+        df = _read(paths[0])
         for path in paths[1:]:
-            df = pd.concat([df, pd.read_excel(path)])
+            df = pd.concat([df, _read(path)])
 
         if df.empty:
             return []
@@ -170,6 +174,11 @@ class Description(ABC):
                 "content": f"Now do the same thing with the following: ```{self.synthesized_text}```",
             }
         ]
+        messages = [
+            message for message in messages if isinstance(message.get("content"), str)
+        ]
+        for message in messages:
+            message["content"] = clean_mojibake(message["content"])
         return messages
 
     def stream_gpt(self, temperature=1, reasoning_effort=None, stream=False):
@@ -203,7 +212,7 @@ class Description(ABC):
             chat = model.start_chat(history=converted_msgs["history"])
             response = chat.send_message(content=converted_msgs["content"])
 
-            answer = response.text
+            answer = clean_mojibake(response.text)
         else:
             client = OpenAI(api_key=GPT_KEY, base_url=GPT_BASE)
             if stream:
@@ -232,7 +241,7 @@ class Description(ABC):
                 def streamed_chunks():
                     for event in response_stream:
                         if event.type == "response.output_text.delta":
-                            yield event.delta
+                            yield clean_mojibake(event.delta)
 
                 answer = streamed_chunks()
             else:
@@ -255,7 +264,7 @@ class Description(ABC):
                         input=self.messages,
                     )
 
-                answer = response.output_text
+                answer = clean_mojibake(response.output_text)
 
         return answer
 
@@ -347,15 +356,95 @@ class PlayerDescription(Description):
 
 
 class PressingDescription(Description):
-    output_token_limit = 150
+    output_token_limit = 250
+
+    METRIC_LABELS = {
+        "chains_pm": "Pressing Chains Per Match",
+        "recovery_opp_half_pm": "Regains In Opp. Half Per Match",
+        "force_long_ball_pm": "Opp. Long Balls Forced Per Match",
+        "press_break_rate_opp_half": "Press Break Rate In Opp. Half",
+        "lead_to_goal_after_broken_pm": "Opp. Goals After Broken Press Per Match",
+        "pass_accuracy_under_pressure": "Opp. Pass Accuracy Under Pressure",
+        "line_breaking_pass_rate_under_pressure": "Opp. Line-Breaking Pass Rate Under Pressure",
+        "ppda": "PPDA",
+    }
+
+    # Direct consequence statements: metric -> level -> what happens on the pitch.
+    # Removes all ambiguity about metric direction.
+    METRIC_CONSEQUENCES = {
+        "chains_pm": {
+            "outstanding": "The team starts pressing sequences in the opposition half far more than any other side.",
+            "excellent": "The team starts pressing sequences in the opposition half significantly more often than most.",
+            "good": "The team starts pressing sequences in the opposition half more often than average.",
+            "average": "The team starts pressing sequences in the opposition half at a typical rate.",
+            "below average": "The team starts pressing sequences in the opposition half less often than most.",
+            "poor": "The team rarely starts pressing sequences in the opposition half.",
+        },
+        "recovery_opp_half_pm": {
+            "outstanding": "The team wins the ball back in the opposition half far more than any other side.",
+            "excellent": "The team wins the ball back in the opposition half significantly more often than most.",
+            "good": "The team wins the ball back in the opposition half more often than average.",
+            "average": "The team wins the ball back in the opposition half at a typical rate.",
+            "below average": "The team wins the ball back in the opposition half less often than most.",
+            "poor": "The team rarely wins the ball back in the opposition half.",
+        },
+        "force_long_ball_pm": {
+            "outstanding": "The press forces opponents into long balls far more than any other side.",
+            "excellent": "The press forces opponents into long balls significantly more often than most.",
+            "good": "The press forces opponents into long balls more often than average.",
+            "average": "The press forces opponents into long balls at a typical rate.",
+            "below average": "The press forces opponents into long balls less often than most.",
+            "poor": "The press rarely forces opponents into long balls.",
+        },
+        "press_break_rate_opp_half": {
+            "outstanding": "Opponents almost never escape the press in the opposition half.",
+            "excellent": "Opponents rarely escape the press in the opposition half.",
+            "good": "Opponents escape the press in the opposition half less often than against most teams.",
+            "average": "Opponents escape the press in the opposition half at a typical rate.",
+            "below average": "Opponents escape the press in the opposition half more often than against most teams.",
+            "poor": "Opponents escape the press in the opposition half frequently — the press is easily broken.",
+        },
+        "lead_to_goal_after_broken_pm": {
+            "outstanding": "When the press is broken, opponents almost never score — the rest-defence absorbs danger completely.",
+            "excellent": "When the press is broken, opponents rarely score — the rest-defence contains the damage well.",
+            "good": "When the press is broken, opponents score less often than against most teams.",
+            "average": "When the press is broken, opponents score at a typical rate.",
+            "below average": "When the press is broken, opponents score more often than against most teams.",
+            "poor": "When the press is broken, opponents frequently score — the rest-defence is exposed.",
+        },
+        "pass_accuracy_under_pressure": {
+            "outstanding": "Opponents struggle badly to complete passes under this team's pressure — passing accuracy collapses.",
+            "excellent": "Opponents complete far fewer passes under this team's pressure — passing accuracy drops sharply.",
+            "good": "Opponents find it harder to complete passes under this team's pressure than against most sides.",
+            "average": "Opponents complete passes under this team's pressure at a typical rate.",
+            "below average": "Opponents still complete passes fairly comfortably under this team's pressure.",
+            "poor": "Opponents pass comfortably under this team's pressure — the press does little to disrupt passing accuracy.",
+        },
+        "line_breaking_pass_rate_under_pressure": {
+            "outstanding": "Opponents almost never play through the defensive lines under this team's pressure.",
+            "excellent": "Opponents rarely play through the defensive lines under this team's pressure — the pressing structure holds its shape.",
+            "good": "Opponents break through the defensive lines under this team's pressure less often than against most sides.",
+            "average": "Opponents break through the defensive lines under this team's pressure at a typical rate.",
+            "below average": "Opponents break through the defensive lines under this team's pressure more often than against most sides.",
+            "poor": "Opponents play through the defensive lines comfortably under this team's pressure.",
+        },
+        "ppda": {
+            "outstanding": "The team steps in extremely early, allowing opponents almost no passes before a defensive action.",
+            "excellent": "The team steps in early, allowing opponents very few passes before a defensive action.",
+            "good": "The team steps in to break opponent sequences quicker than most.",
+            "average": "The team allows a typical number of opponent passes before stepping in with a defensive action.",
+            "below average": "The team is slow to step in, allowing opponents more passes before a defensive action than most.",
+            "poor": "The team is very slow to step in — opponents circulate freely before any defensive action arrives.",
+        },
+    }
 
     @property
     def gpt_examples_path(self):
-        return f"{self.gpt_examples_base}/Pressing.xlsx"
+        return f"{self.gpt_examples_base}/Pressing_analyst.csv"
 
     @property
     def describe_paths(self):
-        return [f"{self.describe_base}/Pressing.xlsx"]
+        return [f"{self.describe_base}/Pressing_analyst.csv"]
 
     def __init__(self, team: PressingTeam):
         self.team = team
@@ -366,9 +455,10 @@ class PressingDescription(Description):
             {
                 "role": "system",
                 "content": (
-                    "You are a UK-based football analyst. "
-                    "You provide succinct explanations about team pressing and defensive intensity using data. "
-                    "You use the statistical description and earlier Q&A pairs to summarise teams."
+                    "You are a tactical data analyst embedded in a Premier League coaching staff. "
+                    "You write concise pressing briefings for the head coach. "
+                    "Your language is direct and action-oriented — you focus on what the data means tactically. "
+                    "You write in British English and refer to the sport as football."
                 ),
             },
             {
@@ -379,7 +469,7 @@ class PressingDescription(Description):
                 "role": "assistant",
                 "content": (
                     "I refer to the game as football. "
-                    "When I say football, I mean association football, not American football."
+                    "I write for coaches, not commentators."
                 ),
             },
         ]
@@ -397,31 +487,65 @@ class PressingDescription(Description):
     def synthesize_text(self) -> str:
         team = self.team
         metrics = team.relevant_metrics
+
         description = (
-            f"Here is a statistical description of how {team.name} presses compared to other teams in the league. "
-            "The lines below use plain language only — do not repeat technical metric names or abbreviations from a data dictionary. \n\n"
+            f"Here is a pressing profile of {team.name} compared to other teams in the league. "
+            f"All ratings are relative to the {len(pd.read_csv('data/pressing/pressing_detailed_metrics.csv'))} teams in the league.\n\n"
         )
+
+        # Core descriptions using direct consequence statements
+        standouts = []
+        concerns = []
 
         for metric in metrics:
             z_key = metric + "_Z"
             if z_key not in team.ser_metrics.index:
                 continue
-            description += "The team was "
-            description += sentences.describe_level(float(team.ser_metrics[z_key]))
-            description += " "
-            description += sentences.pressing_metric_natural_clause(metric)
-            description += " compared to other teams in the league. "
+            z = float(team.ser_metrics[z_key])
+            level = sentences.describe_level(z)
+            label = self.METRIC_LABELS.get(metric, metric)
+            consequence = self.METRIC_CONSEQUENCES.get(metric, {}).get(level, "")
+
+            description += f"{consequence} ({label}) "
+
+            if z > 1.0:
+                standouts.append(label)
+            elif z < -0.5:
+                concerns.append(label)
+
+        if "high_medium_block_pct" in team.ser_metrics.index:
+            pct = float(team.ser_metrics["high_medium_block_pct"])
+            all_pcts = pd.read_csv("data/pressing/pressing_detailed_metrics.csv")["high_medium_block_pct"]
+            rank = int((all_pcts > pct).sum() + 1)
+            n_teams = len(all_pcts)
+            description += (
+                f"\nFor context, {team.name} spent {pct:.1f}% of their out-of-possession time "
+                "defending in a high or medium block (as opposed to a low block), "
+                f"ranking {rank}th out of {n_teams} teams in the league. "
+                f"Across the league this ranges from {all_pcts.min():.1f}% to {all_pcts.max():.1f}% "
+                f"with a median of {all_pcts.median():.1f}%. "
+                "This is not a quality judgement - it reflects the team's defensive positioning preference."
+            )
+
+        # Standouts and concerns (metric names only, no level labels)
+        if standouts:
+            description += "\n\nKey strengths: " + ", ".join(standouts) + "."
+        if concerns:
+            description += "\n\nKey concerns: " + ", ".join(concerns) + "."
 
         return description
 
     def get_prompt_messages(self):
         prompt = (
-            "Please use the statistical description enclosed with ``` to give a concise, 4 sentence summary of the team's pressing style, strengths and weaknesses. "
-            "Do not use raw metric names, acronyms, or column titles — only everyday football language. "
-            "The first sentence should give an overview of how aggressively this team presses relative to the league. "
-            "The second sentence should describe specific strengths. "
-            "The third sentence should describe areas where the team is average or weak. "
-            "Finally, summarise how the team compares to the rest of the league overall."
+            "Please use the pressing profile enclosed with ``` to give a concise 4-sentence briefing "
+            "of this team's pressing style, strengths, and weaknesses. "
+            "The first sentence should describe the team's pressing identity and how it is executed. "
+            "The second sentence should describe pressing strengths. "
+            "The third sentence should describe pressing limitations. "
+            "The fourth sentence should summarise what this pressing approach prioritises and trades off. "
+            "Do not invent consequences not in the data (e.g. rapid restarts, transition speed, possession recycling). "
+            "Do not include metric names, level labels (e.g. excellent, poor), or parenthetical references in your output. "
+            "Write as a tactical analyst would in a briefing to coaching staff."
         )
         return [{"role": "user", "content": prompt}]
 

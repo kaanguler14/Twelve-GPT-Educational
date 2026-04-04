@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 
-from utils.sentences import format_metric
+from utils.sentences import format_metric, format_metric_value
 from classes.data_point import Player, Country, Person, PressingTeam
 from classes.data_source import PlayerStats, CountryStats, PersonStat, PressingStats
 from typing import Union
@@ -210,9 +210,33 @@ class DistributionPlot(Visual):
             line=dict(color="gray", width=1, dash="dot"),
         )
 
+    def _hover_label(self, name, metric, raw_value, hover_value=None, hover_string=""):
+        lines = [str(name), f"{format_metric(metric)}: {format_metric_value(metric, raw_value)}"]
+        if hover_string:
+            if isinstance(hover_value, (int, np.integer)):
+                hover_display = str(int(hover_value))
+            elif isinstance(hover_value, (float, np.floating)) and float(hover_value).is_integer():
+                hover_display = str(int(hover_value))
+            else:
+                hover_display = str(hover_value)
+            resolved = hover_string.replace("%{customdata}", hover_display)
+            lines.append(resolved)
+        return "<br>".join(lines)
+
     def add_group_data(self, df_plot, plots, names, legend, hover="", hover_string=""):
 
         for i, col in enumerate(self.columns):
+            hover_values = (
+                df_plot[col + hover].tolist() if hover else [None] * len(df_plot[col + plots])
+            )
+            hover_labels = [
+                self._hover_label(name, col, raw_value, hover_value, hover_string)
+                for name, raw_value, hover_value in zip(
+                    names,
+                    df_plot[col].tolist(),
+                    hover_values,
+                )
+            ]
             self.fig.add_trace(
                 go.Scatter(
                     x=df_plot[col + plots].tolist(),
@@ -224,9 +248,9 @@ class DistributionPlot(Visual):
                         "line_width": 1.5,
                         "line_color": rgb_to_color(self.bright_green),
                     },
-                    hovertemplate="%{text}<br>" + hover_string + "<extra></extra>",
+                    hovertemplate="%{customdata}<extra></extra>",
                     text=names,
-                    customdata=df_plot[col + hover].tolist(),
+                    customdata=hover_labels,
                     showlegend=False,
                 )
             )
@@ -243,9 +267,15 @@ class DistributionPlot(Visual):
         marker = next(self.marker_shape)
 
         for i, col in enumerate(self.columns):
-            temp_hover_string = hover_string
-
             metric_name = format_metric(col)
+            hover_value = ser_plot[col + hover] if hover else None
+            hover_label = self._hover_label(
+                name,
+                col,
+                ser_plot[col],
+                hover_value,
+                hover_string,
+            )
 
             self.fig.add_trace(
                 go.Scatter(
@@ -259,9 +289,9 @@ class DistributionPlot(Visual):
                         "line_width": 1.5,
                         "line_color": rgb_to_color(color),
                     },
-                    hovertemplate="%{text}<br>" + temp_hover_string + "<extra></extra>",
+                    hovertemplate="%{customdata}<extra></extra>",
                     text=text,
-                    customdata=[ser_plot[col + hover]],
+                    customdata=[hover_label],
                     name=name,
                     showlegend=legend,
                 )
@@ -272,9 +302,13 @@ class DistributionPlot(Visual):
             self.fig.add_annotation(
                 x=0,
                 y=i + 0.4,
-                text=self.annotation_text.format(
-                    metric_name=metric_name,
-                    data=ser_plot[col],
+                text=(
+                    self.annotation_text.format(
+                        metric_name=metric_name,
+                        data=ser_plot[col],
+                    )
+                    if self.plot_type == "scout"
+                    else f"<span style=''>{metric_name}: {format_metric_value(col, ser_plot[col])}</span>"
                 ),
                 showarrow=False,
                 font={

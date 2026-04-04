@@ -25,12 +25,18 @@ from classes.description import (
     PersonDescription,
     PressingDescription,
 )
-from classes.embeddings import PlayerEmbeddings, CountryEmbeddings, PersonEmbeddings
+from classes.embeddings import (
+    PlayerEmbeddings,
+    CountryEmbeddings,
+    PersonEmbeddings,
+    PressingEmbeddings,
+)
 
 from classes.visual import Visual, DistributionPlot, DistributionPlotPersonality
 
 import utils.sentences as sentences
 from utils.gemini import convert_messages_format
+from utils.text import clean_mojibake
 
 
 class Chat:
@@ -69,6 +75,12 @@ class Chat:
         """
         Used by app.py to start off the conversation with plots and descriptions.
         """
+        if isinstance(content, str):
+            content = clean_mojibake(content)
+        elif isinstance(content, GeneratorType):
+            content = (clean_mojibake(chunk) for chunk in content)
+        elif isinstance(content, list):
+            content = [clean_mojibake(x) for x in content]
         message = {"role": role, "content": content}
         self.messages_to_display.append(message)
 
@@ -100,6 +112,7 @@ class Chat:
         # Get relevant information from the user input and then generate a response.
         # This is not added to messages_to_display as it is not a message from the assistant.
         get_relevant_info = self.get_relevant_info(input)
+        get_relevant_info = clean_mojibake(get_relevant_info)
 
         # Now add the user input to the messages. Don't add system information and system messages to messages_to_display.
         self.messages_to_display.append({"role": "user", "content": input})
@@ -115,6 +128,8 @@ class Chat:
         messages = [
             message for message in messages if isinstance(message["content"], str)
         ]
+        for message in messages:
+            message["content"] = clean_mojibake(message["content"])
 
         # Show the messages in an expander
         st.expander("Chat transcript", expanded=False).write(messages)
@@ -137,7 +152,7 @@ class Chat:
             chat = model.start_chat(history=converted_msgs["history"])
             response = chat.send_message(content=converted_msgs["content"])
 
-            answer = response.text
+            answer = clean_mojibake(response.text)
         else:
             client = OpenAI(api_key=GPT_KEY, base_url=GPT_BASE)
             if stream:
@@ -166,7 +181,7 @@ class Chat:
                 def streamed_chunks():
                     for event in response_stream:
                         if event.type == "response.output_text.delta":
-                            yield event.delta
+                            yield clean_mojibake(event.delta)
 
                 answer = streamed_chunks()
             else:
@@ -189,7 +204,7 @@ class Chat:
                         input=messages,
                     )
 
-                answer = response.output_text
+                answer = clean_mojibake(response.output_text)
         message = {"role": "assistant", "content": answer}
 
         # Add the returned value to the messages.
@@ -200,7 +215,7 @@ class Chat:
         Displays the content of a message in streamlit. Handles plots, strings, and StreamingMessages.
         """
         if isinstance(content, str):
-            st.write(content)
+            st.write(clean_mojibake(content))
 
         # Visual
         elif isinstance(content, Visual):
@@ -325,6 +340,7 @@ class PlayerChat(Chat):
 
 class PressingChat(Chat):
     def __init__(self, chat_state_hash, team, pressing, state="empty"):
+        self.embeddings = PressingEmbeddings()
         self.team = team
         self.pressing = pressing
         super().__init__(chat_state_hash, state=state)
@@ -338,7 +354,7 @@ class PressingChat(Chat):
                     f"Your message is too long ({len(x)} characters). Please keep it under 500 characters."
                 )
 
-            self.handle_input(x, stream=True)
+            self.handle_input(x, temperature=0.3, stream=True)
 
     def instruction_messages(self):
         return [
@@ -361,6 +377,13 @@ class PressingChat(Chat):
         ret_val = "Here is a description of the team in terms of pressing data: \n\n"
         description = PressingDescription(self.team)
         ret_val += description.synthesize_text()
+        if self.embeddings.df_dict is not None and not self.embeddings.df_dict.empty:
+            results = self.embeddings.search(query, top_n=5)
+            if not results.empty:
+                ret_val += (
+                    "\n\nHere is some relevant information for answering the question: \n"
+                )
+                ret_val += "\n".join(results["assistant"].astype(str).to_list())
         ret_val += (
             "\n\nIf none of this information is relevant to the user's query, remind them that this chat "
             "is about team pressing statistics versus the league. The user can select another team from the menu on the left."
