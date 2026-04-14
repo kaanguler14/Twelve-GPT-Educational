@@ -186,7 +186,7 @@ class Description(ABC):
             str
         """
 
-        st.expander("Chat transcript", expanded=False).write(self.messages)
+        st.session_state["description_transcript"] = self.messages
 
         if USE_GEMINI:
             import google.generativeai as genai
