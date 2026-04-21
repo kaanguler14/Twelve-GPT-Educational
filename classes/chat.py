@@ -353,12 +353,13 @@ class PressingChat(Chat):
                 st.error(
                     f"Your message is too long ({len(x)} characters). Please keep it under 500 characters."
                 )
+                return
 
             self.handle_input(x, temperature=0.3, stream=True)
 
     def instruction_messages(self):
         return [
-            {"role": "system", "content": "You are a UK-based football analyst."},
+            {"role": "system", "content": "You are a tactical data analyst embedded in a Premier League coaching staff. Your language is direct and action-oriented. You write in British English and refer to the sport as football."},
             {
                 "role": "user",
                 "content": (
@@ -375,8 +376,9 @@ class PressingChat(Chat):
 
     def get_relevant_info(self, query):
         ret_val = "Here is a description of the team in terms of pressing data: \n\n"
-        description = PressingDescription(self.team)
-        ret_val += description.synthesize_text()
+        if not hasattr(self, "_cached_synth_text"):
+            self._cached_synth_text = PressingDescription(self.team).synthesized_text
+        ret_val += self._cached_synth_text
         if self.embeddings.df_dict is not None and not self.embeddings.df_dict.empty:
             results = self.embeddings.search(query, top_n=5)
             if not results.empty:

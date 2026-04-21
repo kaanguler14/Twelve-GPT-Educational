@@ -53,32 +53,32 @@ The first sentence should describe the team's pressing identity and how it is ex
 The second sentence should describe pressing strengths.
 The third sentence should describe pressing limitations.
 The fourth sentence should summarise what this pressing approach prioritises and trades off.
-After each claim, add a parenthetical with the metric name and level, e.g. (PPDA: excellent).
-Do not invent consequences not in the data.
+Do not invent consequences not in the data (e.g. rapid restarts, transition speed, possession recycling).
+Do not include metric names, level labels (e.g. excellent, poor), or parenthetical references in your output.
 Write as a tactical analyst would in a briefing to coaching staff.
 ```
 
 ---
 
-## 4. Few-Shot Örnekler (4 cümle + annotasyonlar)
+## 4. Few-Shot Örnekler (4 cümle, parantez içi referans yok)
 
 ### Liverpool
 frequency average | regaining good | forcing long average | escapes good | goals after escapes poor | disrupting passing good | line-breaking excellent | PPDA excellent
 
-> Liverpool do not press more often than most sides (Pressing Chains Per Match: average) but step in early when they do (PPDA: excellent), breaking opponent sequences before build-up can develop and making it very difficult to play through the defensive lines (Opp. Line-Breaking Pass Rate Under Pressure: excellent). The press wins the ball back high at a solid rate (Regains In Opp. Half Per Match: good), keeps opponents locked in effectively (Press Break Rate In Opp. Half: good), and makes passing under pressure noticeably harder (Opp. Pass Accuracy Under Pressure: good). However, when the press is beaten, opponents create genuine goalscoring situations (Opp. Goals After Broken Press Per Match: poor), and forcing long balls is not a particular feature of their approach (Opp. Long Balls Forced Per Match: average). Overall, Liverpool run a structured, intervention-first system that controls most sequences through early pressure and shape, but carries clear risk when that first line is bypassed.
+> Liverpool do not press more often than most sides but step in early when they do, breaking opponent sequences before build-up can develop and making it very difficult to play through the defensive lines. The press wins the ball back high at a solid rate, keeps opponents locked in effectively, and makes passing under pressure noticeably harder — the structure is well-coordinated when engaged. However, when the press is beaten, opponents create genuine goalscoring situations, pointing to a gap between the quality of the initial engagement and the cover behind it, while forcing long balls is not a particular feature of their approach. Overall, Liverpool run a structured, intervention-first system that controls most sequences through early pressure and shape, but carries clear risk when that first line is bypassed.
 
 **Coverage:** 8/8 ✅
 
 ### Arsenal
 frequency poor | regaining poor | forcing long average | escapes good | goals after escapes average | disrupting passing excellent | line-breaking good | PPDA average
 
-> Arsenal's pressing is built around selective engagement rather than sustained pressure (Pressing Chains Per Match: poor) — they step forward infrequently and rarely win the ball back high as a result (Regains In Opp. Half Per Match: poor). When they do engage, the coordination is strong: passing accuracy drops noticeably under their pressure (Opp. Pass Accuracy Under Pressure: excellent) and opponents struggle to play through the defensive lines (Opp. Line-Breaking Pass Rate Under Pressure: good), forcing them into safer options. Because the press is applied sparingly, opponents can build in front of it without being rushed (PPDA: average, Opp. Long Balls Forced Per Match: average), and the defensive structure behind the press contains escapes with a degree of control rather than shutting them down completely (Press Break Rate In Opp. Half: good, Opp. Goals After Broken Press Per Match: average). Overall, Arsenal prioritise disrupting the quality of opposition possession over committing to sustained pressure or generating frequent high regains.
+> Arsenal's pressing is built around selective engagement rather than sustained pressure, choosing specific moments to step forward instead of sustaining a high press — they rarely win the ball back high as a result. When they do engage, the coordination is strong: passing accuracy drops noticeably under their pressure and opponents struggle to play through the defensive lines, forcing them into safer options. Because the press is applied sparingly, opponents can build in front of it without being rushed, and the defensive structure behind the press contains escapes with a degree of control rather than shutting them down completely. Overall, Arsenal prioritise disrupting the quality of opposition possession over committing to sustained pressure or generating frequent high regains.
 
 **Coverage:** 8/8 ✅
 
 ### Nottingham
 frequency average | regaining average | forcing long poor | escapes poor | goals after escapes excellent | disrupting passing poor | line-breaking average | PPDA poor
 
-> Nottingham press at a standard rate (Pressing Chains Per Match: average) but without the structure to back it up — the press is slow to step in (PPDA: poor), allows opponents to circulate comfortably, and rarely forces them into long balls (Opp. Long Balls Forced Per Match: poor). Opponents escape the initial pressure frequently (Press Break Rate In Opp. Half: poor) and retain their passing quality (Opp. Pass Accuracy Under Pressure: poor), meaning the engagement in advanced areas offers little genuine disruption. Where Nottingham protect themselves is behind the press: those escapes rarely turn into goals (Opp. Goals After Broken Press Per Match: excellent), suggesting the deeper block absorbs danger effectively once the team drops back (Regains In Opp. Half Per Match: average, Opp. Line-Breaking Pass Rate Under Pressure: average). Overall, the pressing is structurally fragile in the opposition half but backed by resilient rest-defence — the real defending happens deeper, not at the point of pressure.
+> Nottingham press at a standard rate but without the structure to back it up — the press is slow to step in, allows opponents to circulate comfortably, and rarely forces them into long balls. Opponents escape the initial pressure frequently and retain their passing quality, meaning the engagement in advanced areas offers little genuine disruption. Where Nottingham protect themselves is behind the press: those escapes rarely turn into goals, suggesting the deeper block absorbs danger effectively once the team drops back. Overall, the pressing is structurally fragile in the opposition half but backed by resilient rest-defence — the real defending happens deeper, not at the point of pressure.
 
 **Coverage:** 8/8 ✅

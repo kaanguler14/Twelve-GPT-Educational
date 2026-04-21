@@ -135,11 +135,8 @@ class Description(ABC):
 
         # Convert to list of dicts
         messages = []
-        for i, row in df.iterrows():
-            if i == 0:
-                messages.append({"role": "user", "content": row["user"]})
-            else:
-                messages.append({"role": "user", "content": row["user"]})
+        for _, row in df.iterrows():
+            messages.append({"role": "user", "content": row["user"]})
             messages.append({"role": "assistant", "content": row["assistant"]})
 
         return messages
@@ -358,6 +355,9 @@ class PlayerDescription(Description):
 class PressingDescription(Description):
     output_token_limit = 250
 
+    CONTEXT_CSV = "data/pressing/pressing_league_table.csv"
+    BLOCK_PCT_COLUMN = "Block %"
+
     METRIC_LABELS = {
         "chains_pm": "Pressing Chains Per Match",
         "recovery_opp_half_pm": "Regains In Opp. Half Per Match",
@@ -484,21 +484,35 @@ class PressingDescription(Description):
 
         return intro
 
+    @staticmethod
+    def _ordinal(n):
+        """Return ordinal string for an integer (1 -> '1st', 2 -> '2nd', etc.)."""
+        if 11 <= (n % 100) <= 13:
+            return f"{n}th"
+        return f"{n}{['th','st','nd','rd'][n % 10] if n % 10 < 4 else 'th'}"
+
     def synthesize_text(self) -> str:
         team = self.team
         metrics = team.relevant_metrics
 
+        df_league = pd.read_csv("data/pressing/pressing_detailed_metrics.csv")
+
         description = (
             f"Here is a pressing profile of {team.name} compared to other teams in the league. "
-            f"All ratings are relative to the {len(pd.read_csv('data/pressing/pressing_detailed_metrics.csv'))} teams in the league.\n\n"
+            f"All ratings are relative to the {len(df_league)} teams in the league.\n\n"
         )
 
-        # Core descriptions using direct consequence statements
-        standouts = []
-        concerns = []
+        # Group metrics into strengths / neutral / weaknesses.
+        # Asymmetric thresholds: strengths require z>1.0,
+        # concerns surface earlier at z<-0.5.
+        strengths = []
+        neutral = []
+        weaknesses = []
+        n_teams = len(df_league)
 
         for metric in metrics:
             z_key = metric + "_Z"
+            rank_key = metric + "_Ranks"
             if z_key not in team.ser_metrics.index:
                 continue
             z = float(team.ser_metrics[z_key])
@@ -506,48 +520,75 @@ class PressingDescription(Description):
             label = self.METRIC_LABELS.get(metric, metric)
             consequence = self.METRIC_CONSEQUENCES.get(metric, {}).get(level, "")
 
-            description += f"{consequence} ({label}) "
+            parts = [label]
+            if metric in team.ser_metrics.index:
+                parts.append(sentences.format_metric_value(metric, team.ser_metrics[metric]))
+            if rank_key in team.ser_metrics.index:
+                rank = int(team.ser_metrics[rank_key])
+                parts.append(f"ranked {self._ordinal(rank)} of {n_teams}")
+
+            line = f"{' — '.join(parts)}. {consequence}"
 
             if z > 1.0:
-                standouts.append(label)
+                strengths.append(line)
             elif z < -0.5:
-                concerns.append(label)
+                weaknesses.append(line)
+            else:
+                neutral.append(line)
 
-        if "high_medium_block_pct" in team.ser_metrics.index:
-            pct = float(team.ser_metrics["high_medium_block_pct"])
-            all_pcts = pd.read_csv("data/pressing/pressing_detailed_metrics.csv")["high_medium_block_pct"]
-            rank = int((all_pcts > pct).sum() + 1)
-            n_teams = len(all_pcts)
-            description += (
-                f"\nFor context, {team.name} spent {pct:.1f}% of their out-of-possession time "
-                "defending in a high or medium block (as opposed to a low block), "
-                f"ranking {rank}th out of {n_teams} teams in the league. "
-                f"Across the league this ranges from {all_pcts.min():.1f}% to {all_pcts.max():.1f}% "
-                f"with a median of {all_pcts.median():.1f}%. "
-                "This is not a quality judgement - it reflects the team's defensive positioning preference."
-            )
+        if strengths:
+            description += "Strengths:\n" + "\n".join(f"- {s}" for s in strengths) + "\n\n"
+        if neutral:
+            description += "Neutral:\n" + "\n".join(f"- {s}" for s in neutral) + "\n\n"
+        if weaknesses:
+            description += "Weaknesses:\n" + "\n".join(f"- {s}" for s in weaknesses) + "\n\n"
 
-        # Standouts and concerns (metric names only, no level labels)
-        if standouts:
-            description += "\n\nKey strengths: " + ", ".join(standouts) + "."
-        if concerns:
-            description += "\n\nKey concerns: " + ", ".join(concerns) + "."
+        try:
+            df_context = pd.read_csv(self.CONTEXT_CSV)
+            col = self.BLOCK_PCT_COLUMN
+            team_row = df_context[df_context["Team"] == team.name]
+            if not team_row.empty and col in df_context.columns:
+                pct = float(team_row[col].iloc[0])
+                all_pcts = df_context[col]
+                rank = int((all_pcts > pct).sum() + 1)
+                description += (
+                    f"Context: {team.name} spent {pct:.1f}% of their out-of-possession time "
+                    "defending in a high or medium block (as opposed to a low block), "
+                    f"ranking {self._ordinal(rank)} out of {len(df_context)} teams in the league. "
+                    f"Across the league this ranges from {all_pcts.min():.1f}% to {all_pcts.max():.1f}% "
+                    f"with a median of {all_pcts.median():.1f}%. "
+                    "This is not a quality judgement — it reflects the team's defensive positioning preference."
+                )
+        except FileNotFoundError:
+            pass
 
         return description
 
     def get_prompt_messages(self):
-        prompt = (
-            "Please use the pressing profile enclosed with ``` to give a concise 4-sentence briefing "
-            "of this team's pressing style, strengths, and weaknesses. "
-            "The first sentence should describe the team's pressing identity and how it is executed. "
-            "The second sentence should describe pressing strengths. "
-            "The third sentence should describe pressing limitations. "
-            "The fourth sentence should summarise what this pressing approach prioritises and trades off. "
-            "Do not invent consequences not in the data (e.g. rapid restarts, transition speed, possession recycling). "
-            "Do not include metric names, level labels (e.g. excellent, poor), or parenthetical references in your output. "
-            "Write as a tactical analyst would in a briefing to coaching staff."
-        )
-        return [{"role": "user", "content": prompt}]
+        return [
+            {
+                "role": "user",
+                "content": (
+                    "Please use the pressing profile enclosed with ``` to give a concise "
+                    "4-sentence briefing of this team's pressing style. "
+                    "The profile is organised into Strengths, Neutral, and Weaknesses sections. "
+                    "Sentence 1: describe the team's pressing identity — how and where they press. "
+                    "Sentence 2: describe what the press does well, using the Strengths section. "
+                    "Sentence 3: describe where the press is limited or vulnerable, using the Weaknesses section. "
+                    "If there are no weaknesses, describe which areas are merely average rather than inventing problems. "
+                    "Sentence 4: summarise the overall trade-off this pressing approach makes. "
+                    "Rules: do not invent consequences not supported by the data "
+                    "(e.g. rapid restarts, transition speed, possession recycling). "
+                    "Do not use metric names, level labels (outstanding, excellent, good, average, "
+                    "below average, poor), or parenthetical references. "
+                    "Write as a tactical analyst briefing coaching staff."
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": "Sure, please provide the pressing profile.",
+            },
+        ]
 
 
 class CountryDescription(Description):
