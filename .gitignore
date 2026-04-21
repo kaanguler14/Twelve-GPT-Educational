@@ -16,3 +16,13 @@ user_info.json
 clustering.ipynb
 20260223 - Dynamic Events CSV Specifications.pdf
 dataset/
+
+# Generated pressing analyst presentation outputs
+/Pressing_Analyst_*.pptx
+/Pressing_Analyst_*.pdf
+
+# Images
+*.png
+
+# Claude local settings
+.claude/settings.local.json
