@@ -739,20 +739,22 @@ class PressingDescription(Description):
                 "role": "user",
                 "content": (
                     "Rewrite the pressing briefing enclosed with ``` as a coach "
-                    "would deliver it to their staff, in three tight paragraphs "
-                    "of one to two sentences each, followed by a single closing "
-                    "sentence. Keep the total length under 120 words. Avoid "
-                    "repeating the same observation across paragraphs. "
+                    "would deliver it to their staff, as a single continuous "
+                    "paragraph with no line breaks or blank lines. "
+                    "Keep the total length under 120 words. Avoid repeating the "
+                    "same observation. "
                     "Preserve all factual content and do not add any claim not "
                     "already in the text. "
                     "Use connectives — 'and', 'while', 'however', 'meanwhile', "
-                    "'yet', 'although' — so each paragraph reads as a single "
+                    "'yet', 'although' — so the paragraph reads as a single "
                     "analytical thought rather than a list of separate sentences. "
                     "Do not add metric names, percentages, ranks, or level labels "
                     "(outstanding, excellent, good, average, below average, poor). "
                     "Do not invent consequences not supported by the text "
                     "(e.g. rapid restarts, transition speed, possession recycling). "
-                    "Write as a tactical analyst briefing coaching staff in British English."
+                    "Write as a tactical analyst briefing coaching staff in British English. "
+                    "Output a single paragraph only — no headings, no bullet points, "
+                    "no newline characters between sentences."
                 ),
             },
             {
