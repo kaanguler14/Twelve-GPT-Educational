@@ -53,3 +53,10 @@ USE_GEMINI = _bool_secret("USE_GEMINI", False)
 GEMINI_API_KEY = _secret("GEMINI_API_KEY", "") or ""
 GEMINI_CHAT_MODEL = _secret("GEMINI_CHAT_MODEL", "") or ""
 GEMINI_EMBEDDING_MODEL = _secret("GEMINI_EMBEDDING_MODEL", "") or ""
+
+# Local LM Studio secrets
+USE_LM_STUDIO = _bool_secret("USE_LM_STUDIO", False)
+LM_STUDIO_API_KEY = _secret("LM_STUDIO_API_KEY", "") or ""
+LM_STUDIO_API_BASE = _secret("LM_STUDIO_API_BASE", "") or ""
+LM_STUDIO_CHAT_MODEL = _secret("LM_STUDIO_CHAT_MODEL", "") or ""
+LM_STUDIO_EMBEDDING_MODEL = _secret("LM_STUDIO_EMBEDDING_MODEL", "") or ""
