@@ -1,65 +1,61 @@
 user,assistant
-"Now do the same thing with the following: ```Here is a pressing profile of Liverpool compared to other teams in the league. All ratings are relative to the 20 teams in the league.
+"Now do the same thing with the following: ```Pressing profile for Liverpool, benchmarked against the rest of the league.
 
-Strengths:
-- Opp. Line-Breaking Pass Rate Under Pressure — 15.58% — ranked 4th of 20. Opponents rarely play through the defensive lines under this team's pressure — the pressing structure holds its shape.
-- PPDA — 7.90 — ranked 3rd of 20. The team steps in early, allowing opponents very few passes before a defensive action.
+Liverpool press with aggressive intent from the front. They recover the ball high more often than most, even without sustaining constant high pressure. Liverpool split their out-of-possession time between high/medium and low blocks at a typical rate for the league.
 
-Neutral:
-- Pressing Chains Per Match — 19.24 — ranked 13th of 20. The team starts pressing sequences in the opposition half at a typical rate.
-- Regains In Opp. Half Per Match — 27.87 — ranked 5th of 20. The team wins the ball back in the opposition half more often than average.
-- Opp. Long Balls Forced Per Match — 8.00 — ranked 11th of 20. The press forces opponents into long balls at a typical rate.
-- Press Break Rate In Opp. Half — 61.15% — ranked 7th of 20. Opponents escape the press in the opposition half less often than against most teams.
-- Opp. Pass Accuracy Under Pressure — 88.90% — ranked 6th of 20. Opponents find it harder to complete passes under this team's pressure than against most sides.
+The reward comes from what happens once they engage. Opponents rarely play through the defensive lines under this team's pressure - the pressing structure holds its shape. Opponents find it harder to complete passes under this team's pressure than against most sides. Opponents escape the press in the opposition half less often than against most teams.
 
-Weaknesses:
-- Opp. Goals After Broken Press Per Match — 0.21 — ranked 16th of 20. When the press is broken, opponents frequently score — the rest-defence is exposed.
+The bigger danger sits behind the press. When the press is broken, opponents frequently score - the rest-defence is exposed.
 
-Context: Liverpool spent 91.4% of their out-of-possession time defending in a high or medium block (as opposed to a low block), ranking 10th out of 20 teams in the league. Across the league this ranges from 85.8% to 93.8% with a median of 91.4%. This is not a quality judgement — it reflects the team's defensive positioning preference.```","Liverpool defend with a high line and step in early when they engage, breaking opponent sequences before build-up can develop and making it very difficult to play through the defensive lines. The press wins the ball back high at a solid rate, keeps opponents locked in effectively, and makes passing under pressure noticeably harder — the structure is well-coordinated when engaged. However, when the press is beaten, opponents create genuine goalscoring situations, pointing to a gap between the quality of the initial engagement and the cover behind it, while forcing long balls is not a particular feature of their approach. Overall, Liverpool run a structured, intervention-first system from a high defensive line that controls most sequences through early pressure and shape, but carries clear risk when that first line is bypassed."
-"Now do the same thing with the following: ```Here is a pressing profile of Arsenal compared to other teams in the league. All ratings are relative to the 20 teams in the league.
+Overall, this is a press that can create problems when intact, but becomes costly when bypassed.```","Liverpool press with aggressive intent and engage early, even if the overall volume of high pressure is not extreme. They still recover the ball high often enough to keep opponents under stress.
 
-Strengths:
-- Opp. Pass Accuracy Under Pressure — 87.91% — ranked 1st of 20. Opponents complete far fewer passes under this team's pressure — passing accuracy drops sharply.
+When the press lands, the structure is strong: opponents struggle to play through it, passing quality drops, and escapes in the opposition half are limited.
 
-Neutral:
-- Opp. Long Balls Forced Per Match — 7.76 — ranked 13th of 20. The press forces opponents into long balls at a typical rate.
-- Press Break Rate In Opp. Half — 60.53% — ranked 4th of 20. Opponents escape the press in the opposition half less often than against most teams.
-- Opp. Goals After Broken Press Per Match — 0.11 — ranked 8th of 20. When the press is broken, opponents score at a typical rate.
-- Opp. Line-Breaking Pass Rate Under Pressure — 15.85% — ranked 7th of 20. Opponents break through the defensive lines under this team's pressure less often than against most sides.
-- PPDA — 9.50 — ranked 10th of 20. The team allows a typical number of opponent passes before stepping in with a defensive action.
+The trade-off appears behind the first line, where broken presses can still turn into costly situations.
 
-Weaknesses:
-- Pressing Chains Per Match — 16.00 — ranked 19th of 20. The team rarely starts pressing sequences in the opposition half.
-- Regains In Opp. Half Per Match — 20.50 — ranked 20th of 20. The team rarely wins the ball back in the opposition half.
+Overall, Liverpool's press is disruptive and well-coordinated when intact, but it carries real danger once that first wave is beaten."
+"Now do the same thing with the following: ```Pressing profile for Arsenal, benchmarked against the rest of the league.
 
-Context: Arsenal spent 92.8% of their out-of-possession time defending in a high or medium block (as opposed to a low block), ranking 5th out of 20 teams in the league. Across the league this ranges from 85.8% to 93.8% with a median of 91.4%. This is not a quality judgement — it reflects the team's defensive positioning preference.```","Arsenal hold one of the highest defensive lines in the league yet press selectively rather than sustaining constant pressure, choosing specific moments to step forward — they rarely win the ball back high as a result. When they do engage, the coordination is strong: passing accuracy drops noticeably under their pressure and opponents struggle to play through the defensive lines, forcing them into safer options. Because the press is applied sparingly despite the aggressive positioning, opponents can build in front of it without being rushed, and the defensive structure behind the press contains escapes without letting them become costly. Overall, Arsenal prioritise disrupting the quality of opposition possession through positioning and selective engagement over committing to sustained pressure or generating frequent high regains."
-"Now do the same thing with the following: ```Here is a pressing profile of Nottingham compared to other teams in the league. All ratings are relative to the 20 teams in the league.
+Arsenal defend high but press selectively, preferring controlled engagements over constant front-foot pressure. They do not press high often, and the ball is rarely being won back in the opposition half. Arsenal defend in a high or medium block for the great majority of their out-of-possession time, more than most teams in the league.
 
-Strengths:
-- Opp. Goals After Broken Press Per Match — 0.05 — ranked 3rd of 20. When the press is broken, opponents rarely score — the rest-defence contains the damage well.
+The reward comes from what happens once they engage. Opponents complete far fewer passes under this team's pressure - passing accuracy drops sharply. Opponents break through the defensive lines under this team's pressure less often than against most sides. Opponents escape the press in the opposition half less often than against most teams.
 
-Neutral:
-- Pressing Chains Per Match — 19.08 — ranked 14th of 20. The team starts pressing sequences in the opposition half at a typical rate.
-- Regains In Opp. Half Per Match — 27.43 — ranked 8th of 20. The team wins the ball back in the opposition half at a typical rate.
-- Opp. Line-Breaking Pass Rate Under Pressure — 16.55% — ranked 8th of 20. Opponents break through the defensive lines under this team's pressure at a typical rate.
+That keeps the press from generating much territorial pressure higher up the pitch.
 
-Weaknesses:
-- Opp. Long Balls Forced Per Match — 6.46 — ranked 19th of 20. The press rarely forces opponents into long balls.
-- Press Break Rate In Opp. Half — 73.80% — ranked 20th of 20. Opponents escape the press in the opposition half frequently — the press is easily broken.
-- Opp. Pass Accuracy Under Pressure — 90.96% — ranked 18th of 20. Opponents pass comfortably under this team's pressure — the press does little to disrupt passing accuracy.
-- PPDA — 10.99 — ranked 18th of 20. The team is very slow to step in — opponents circulate freely before any defensive action arrives.
+Overall, this is a selective press: it works when triggered, but it is not built to dominate matches through constant territorial pressure.```","Arsenal defend high but press selectively, preferring controlled engagements over constant front-foot pressure. As a result, they do not generate many high regains.
 
-Context: Nottingham spent 85.8% of their out-of-possession time defending in a high or medium block (as opposed to a low block), ranking 20th out of 20 teams in the league. Across the league this ranges from 85.8% to 93.8% with a median of 91.4%. This is not a quality judgement — it reflects the team's defensive positioning preference.```","Nottingham sit deeper than any other side in the league and press at a standard rate when they do step forward, but without the structure to back it up — the engagement is slow to arrive, allows opponents to circulate comfortably, and rarely forces them into long balls. Opponents escape the initial pressure frequently and retain their passing quality, meaning the pressing in advanced areas offers little genuine disruption. Where Nottingham protect themselves is behind the press: those escapes rarely turn into goals, and the deep defensive positioning absorbs danger effectively once the team drops back. Overall, the pressing is structurally fragile when the team steps forward but backed by a resilient deep block — the real defending happens in their own territory, not at the point of pressure."
-"Now do the same thing with the following: ```Here is a pressing profile of Wolverhampton compared to other teams in the league. All ratings are relative to the 20 teams in the league.
+When they do engage, the payoff is strong: opponents complete fewer passes, break through the lines less often, and escape the press less frequently.
 
-Neutral:
-- Pressing Chains Per Match — 19.24 — ranked 12th of 20. The team starts pressing sequences in the opposition half at a typical rate.
-- Regains In Opp. Half Per Match — 27.81 — ranked 6th of 20. The team wins the ball back in the opposition half more often than average.
-- Opp. Long Balls Forced Per Match — 8.35 — ranked 10th of 20. The press forces opponents into long balls at a typical rate.
-- Press Break Rate In Opp. Half — 62.78% — ranked 9th of 20. Opponents escape the press in the opposition half at a typical rate.
-- Opp. Goals After Broken Press Per Match — 0.14 — ranked 12th of 20. When the press is broken, opponents score at a typical rate.
-- Opp. Pass Accuracy Under Pressure — 89.83% — ranked 11th of 20. Opponents complete passes under this team's pressure at a typical rate.
-- Opp. Line-Breaking Pass Rate Under Pressure — 17.07% — ranked 11th of 20. Opponents break through the defensive lines under this team's pressure at a typical rate.
-- PPDA — 9.63 — ranked 12th of 20. The team allows a typical number of opponent passes before stepping in with a defensive action.
+The trade-off is that this structure disrupts build-up without producing sustained territorial pressure higher up the pitch.
 
-Context: Wolverhampton spent 90.9% of their out-of-possession time defending in a high or medium block (as opposed to a low block), ranking 13th out of 20 teams in the league. Across the league this ranges from 85.8% to 93.8% with a median of 91.4%. This is not a quality judgement — it reflects the team's defensive positioning preference.```","Wolverhampton's pressing sits close to the league norm across all dimensions — they engage at a standard frequency, step in at a typical tempo, and position themselves at a standard block height rather than committing to an especially high or deep defensive line. The press does not generate standout disruption in any area, with opponents retaining their passing quality, finding ways through the lines, and escaping the press at normal rates. Equally, there are no glaring structural weaknesses: opponents do not punish escapes with unusual frequency and the team is not exposed by its positioning. Overall, this is a functionally neutral pressing profile — standard in both engagement and defensive positioning — that neither creates nor concedes significant advantages through high pressing, leaving tactical edge to be found in other phases of play."
+Overall, this is a selective press that works when triggered but is not built to dominate matches through constant front-foot pressure."
+"Now do the same thing with the following: ```Pressing profile for Nottingham, benchmarked against the rest of the league.
+
+Nottingham defend from a deeper starting point and wait before engaging, giving opponents time on the ball. The overall pressing volume and regain output sit close to the league norm. Nottingham sit deeper than most, spending relatively little of their out-of-possession time in a high or medium block.
+
+The reward comes from what happens once they engage. When the press is broken, opponents rarely score - the rest-defence contains the damage well.
+
+Once the first action is bypassed or softened, the press loses bite. Opponents escape the press in the opposition half frequently - the press is easily broken. The press rarely forces opponents into long balls. Opponents pass comfortably under this team's pressure - the press does little to disrupt passing accuracy.
+
+Overall, this press can disrupt opponents, but the payoff comes with clear limits elsewhere in the profile.```","Nottingham defend from a deeper starting point and wait before engaging, so the press arrives late and the overall profile is cautious rather than front-foot. Their main protection comes after the first line, with danger being absorbed once opponents get through.
+
+When they do engage, there is little disruption: opponents escape too often, pass comfortably, and are rarely forced into lower-control solutions.
+
+The trade-off is that the deeper structure protects against punishment after broken presses, but it offers little control at the point of pressure.
+
+Overall, this is a deeper, damage-limiting approach in which the real security comes behind the press rather than from the press itself."
+"Now do the same thing with the following: ```Pressing profile for Wolverhampton, benchmarked against the rest of the league.
+
+Wolverhampton adopt a balanced approach to pressing. They recover the ball high more often than most, even without sustaining constant high pressure. Wolverhampton split their out-of-possession time between high/medium and low blocks at a typical rate for the league.
+
+Beyond the basic profile, the press offers only modest additional disruption once it engages.
+
+The risk profile is relatively clean: opponents are not exposing the structure regularly when the press breaks.
+
+Overall, this is a pressing approach that sits close to league average throughout.```","Wolverhampton sit close to the league norm in how often they press, where they defend, and how quickly they engage. Nothing in the profile points to either an especially aggressive or especially passive approach.
+
+Once they do engage, the press offers only modest disruption, but there are no clear structural failures behind it either.
+
+The trade-off is that the team neither gains a major edge through high pressure nor exposes itself heavily when that pressure is beaten.
+
+Overall, this is a balanced pressing profile that stays functional without becoming a major tactical weapon."

@@ -484,104 +484,275 @@ class PressingDescription(Description):
 
         return intro
 
-    @staticmethod
-    def _ordinal(n):
-        """Return ordinal string for an integer (1 -> '1st', 2 -> '2nd', etc.)."""
-        if 11 <= (n % 100) <= 13:
-            return f"{n}th"
-        return f"{n}{['th','st','nd','rd'][n % 10] if n % 10 < 4 else 'th'}"
+    PROFILE_METRICS = ("ppda", "chains_pm", "recovery_opp_half_pm")
+    COST_METRIC = "lead_to_goal_after_broken_pm"
+
+    def _block_context(self):
+        team = self.team
+        try:
+            df_context = pd.read_csv(self.CONTEXT_CSV)
+        except FileNotFoundError:
+            return "", ""
+        col = self.BLOCK_PCT_COLUMN
+        if col not in df_context.columns:
+            return "", ""
+        team_row = df_context[df_context["Team"] == team.name]
+        if team_row.empty:
+            return "", ""
+        pct = float(team_row[col].iloc[0])
+        all_pcts = df_context[col]
+        if all_pcts.std() == 0:
+            return "", ""
+        z = (pct - all_pcts.mean()) / all_pcts.std()
+        if z >= 0.5:
+            return "high", (
+                f"{team.name} defend in a high or medium block for the great majority "
+                "of their out-of-possession time, more than most teams in the league."
+            )
+        if z <= -0.5:
+            return "deep", (
+                f"{team.name} sit deeper than most, spending relatively little of "
+                "their out-of-possession time in a high or medium block."
+            )
+        return "balanced", (
+            f"{team.name} split their out-of-possession time between high/medium and "
+            "low blocks at a typical rate for the league."
+        )
+
+    def _opening_sentence(self, ppda_z, chains_z, block_state):
+        team_name = self.team.name
+        if block_state == "high" and chains_z < -0.5:
+            return (
+                f"{team_name} defend high but press selectively, "
+                "preferring controlled engagements over constant front-foot pressure."
+            )
+        if ppda_z > 1.0:
+            return f"{team_name} press with aggressive intent from the front."
+        if ppda_z < -1.0 and block_state == "deep":
+            return (
+                f"{team_name} defend from a deeper starting point and wait before engaging, "
+                "giving opponents time on the ball."
+            )
+        if ppda_z < -1.0:
+            return (
+                f"{team_name} defend with a patient, passive approach, "
+                "conceding space before engaging."
+            )
+        return f"{team_name} adopt a balanced approach to pressing."
+
+    def _metric_z(self, metric):
+        try:
+            return float(self.team.ser_metrics.get(metric + "_Z", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _top_sentences(self, findings, limit=3):
+        findings = sorted(findings, key=lambda item: item[0], reverse=True)
+        return [sentence for _, sentence in findings[:limit]]
+
+    def _profile_support_sentence(self, chains_z, recovery_z):
+        if chains_z > 0.5 and recovery_z > 0.5:
+            return (
+                "They start plenty of high pressing sequences and regularly turn them "
+                "into regains in the opposition half."
+            )
+        if chains_z > 0.5 and recovery_z < -0.5:
+            return (
+                "They step forward to press high often, but that volume does not turn "
+                "into enough regains in advanced areas."
+            )
+        if chains_z < -0.5 and recovery_z > 0.5:
+            return (
+                "They do not press high constantly, yet when they do step forward they "
+                "still recover the ball well in advanced areas."
+            )
+        if chains_z < -0.5 and recovery_z < -0.5:
+            return (
+                "They do not press high often, and the ball is rarely being won back "
+                "in the opposition half."
+            )
+        if chains_z > 0.5:
+            return (
+                "They create plenty of high pressing moments, even if the regain return "
+                "is closer to average."
+            )
+        if recovery_z > 0.5:
+            return (
+                "They recover the ball high more often than most, even without "
+                "sustaining constant high pressure."
+            )
+        if chains_z < -0.5:
+            return "The overall pressing volume is selective rather than constant."
+        if recovery_z < -0.5:
+            return "The press is not producing enough regains in the opposition half."
+        return "The overall pressing volume and regain output sit close to the league norm."
+
+    def _profile_cost_sentence(self, chains_z, recovery_z, block_state):
+        if chains_z < -0.5 and recovery_z < -0.5:
+            return (
+                "That keeps the press from generating much territorial pressure "
+                "higher up the pitch."
+            )
+        if chains_z < -0.5 and block_state == "high":
+            return (
+                "That profile limits how much territory they win through the press, "
+                "even from an aggressive starting position."
+            )
+        if chains_z < -0.5:
+            return (
+                "That profile limits how much territorial pressure they create through "
+                "the press."
+            )
+        if recovery_z < -0.5:
+            return "That means the press is not generating enough territorial payoff after it engages."
+        return ""
 
     def synthesize_text(self) -> str:
         team = self.team
         metrics = team.relevant_metrics
 
-        df_league = pd.read_csv("data/pressing/pressing_detailed_metrics.csv")
-
-        description = (
-            f"Here is a pressing profile of {team.name} compared to other teams in the league. "
-            f"All ratings are relative to the {len(df_league)} teams in the league.\n\n"
-        )
-
-        # Group metrics into strengths / neutral / weaknesses.
-        # Asymmetric thresholds: strengths require z>1.0,
-        # concerns surface earlier at z<-0.5.
-        strengths = []
-        neutral = []
-        weaknesses = []
-        n_teams = len(df_league)
+        ppda_z = self._metric_z("ppda")
+        chains_z = self._metric_z("chains_pm")
+        recovery_z = self._metric_z("recovery_opp_half_pm")
+        reward_findings = []
+        weakness_findings = []
+        cost_findings = []
 
         for metric in metrics:
             z_key = metric + "_Z"
-            rank_key = metric + "_Ranks"
             if z_key not in team.ser_metrics.index:
                 continue
             z = float(team.ser_metrics[z_key])
             level = sentences.describe_level(z)
-            label = self.METRIC_LABELS.get(metric, metric)
-            consequence = self.METRIC_CONSEQUENCES.get(metric, {}).get(level, "")
+            sentence = self.METRIC_CONSEQUENCES.get(metric, {}).get(level, "")
+            if not sentence:
+                continue
 
-            parts = [label]
-            if metric in team.ser_metrics.index:
-                parts.append(sentences.format_metric_value(metric, team.ser_metrics[metric]))
-            if rank_key in team.ser_metrics.index:
-                rank = int(team.ser_metrics[rank_key])
-                parts.append(f"ranked {self._ordinal(rank)} of {n_teams}")
-
-            line = f"{' — '.join(parts)}. {consequence}"
-
-            if z > 1.0:
-                strengths.append(line)
+            if metric in self.PROFILE_METRICS:
+                continue
+            if metric == self.COST_METRIC:
+                if z > 0.5:
+                    reward_findings.append((abs(z), sentence))
+                elif z < -0.5:
+                    cost_findings.append((abs(z), sentence))
+            elif z > 0.5:
+                reward_findings.append((abs(z), sentence))
             elif z < -0.5:
-                weaknesses.append(line)
-            else:
-                neutral.append(line)
+                weakness_findings.append((abs(z), sentence))
 
-        if strengths:
-            description += "Strengths:\n" + "\n".join(f"- {s}" for s in strengths) + "\n\n"
-        if neutral:
-            description += "Neutral:\n" + "\n".join(f"- {s}" for s in neutral) + "\n\n"
-        if weaknesses:
-            description += "Weaknesses:\n" + "\n".join(f"- {s}" for s in weaknesses) + "\n\n"
+        reward_sentences = self._top_sentences(reward_findings)
+        weakness_sentences = self._top_sentences(weakness_findings)
+        cost_sentences = self._top_sentences(cost_findings, limit=2)
 
-        try:
-            df_context = pd.read_csv(self.CONTEXT_CSV)
-            col = self.BLOCK_PCT_COLUMN
-            team_row = df_context[df_context["Team"] == team.name]
-            if not team_row.empty and col in df_context.columns:
-                pct = float(team_row[col].iloc[0])
-                all_pcts = df_context[col]
-                rank = int((all_pcts > pct).sum() + 1)
-                description += (
-                    f"Context: {team.name} spent {pct:.1f}% of their out-of-possession time "
-                    "defending in a high or medium block (as opposed to a low block), "
-                    f"ranking {self._ordinal(rank)} out of {len(df_context)} teams in the league. "
-                    f"Across the league this ranges from {all_pcts.min():.1f}% to {all_pcts.max():.1f}% "
-                    f"with a median of {all_pcts.median():.1f}%. "
-                    "This is not a quality judgement — it reflects the team's defensive positioning preference."
-                )
-        except FileNotFoundError:
-            pass
+        block_state, block_sentence = self._block_context()
+        profile_sentences = [
+            self._opening_sentence(ppda_z, chains_z, block_state),
+            self._profile_support_sentence(chains_z, recovery_z),
+        ]
+        if block_sentence:
+            profile_sentences.append(block_sentence)
 
-        return description
+        if reward_sentences:
+            reward = (
+                "The reward comes from what happens once they engage. "
+                + " ".join(reward_sentences)
+            )
+        else:
+            reward = (
+                "Beyond the basic profile, the press offers only modest additional "
+                "disruption once it engages."
+            )
+
+        risk_parts = []
+        profile_cost_sentence = self._profile_cost_sentence(
+            chains_z, recovery_z, block_state
+        )
+        if profile_cost_sentence:
+            risk_parts.append(profile_cost_sentence)
+        if weakness_sentences:
+            risk_parts.append(
+                "Once the first action is bypassed or softened, the press loses bite. "
+                + " ".join(weakness_sentences)
+            )
+        if cost_sentences:
+            risk_parts.append(
+                "The bigger danger sits behind the press. "
+                + " ".join(cost_sentences)
+            )
+        if risk_parts:
+            risk = " ".join(risk_parts)
+        else:
+            risk = (
+                "The risk profile is relatively clean: opponents are not exposing "
+                "the structure regularly when the press breaks."
+            )
+
+        r = len(reward_findings)
+        w = len(weakness_findings)
+        c = len(cost_findings)
+        p = 1 if profile_cost_sentence else 0
+
+        if r > 0 and w == 0 and c == 0 and p == 0:
+            closing = (
+                "Overall, this is a front-foot pressing approach that combines pressure, "
+                "disruption, and security."
+            )
+        elif r > 0 and p > 0 and w == 0 and c == 0:
+            closing = (
+                "Overall, this is a selective press: it works when triggered, but it is "
+                "not built to dominate matches through constant territorial pressure."
+            )
+        elif r == 0 and w == 0 and c == 0 and p == 0:
+            closing = (
+                "Overall, this is a pressing approach that sits close to league average "
+                "throughout."
+            )
+        elif r == 0 and (w > 0 or c > 0 or p > 0):
+            closing = (
+                "Overall, this pressing approach carries more risk than reward."
+            )
+        elif c > 0 and r > 0:
+            closing = (
+                "Overall, this is a press that can create problems when intact, "
+                "but becomes costly when bypassed."
+            )
+        elif r > 0 and (w > 0 or p > 0):
+            closing = (
+                "Overall, this press can disrupt opponents, but the payoff comes with "
+                "clear limits elsewhere in the profile."
+            )
+        else:
+            closing = (
+                "Overall, this is a measured pressing approach with rewards and risks "
+                "in proportion."
+            )
+
+        profile = " ".join(profile_sentences)
+        return (
+            f"Pressing profile for {team.name}, benchmarked against the rest of the league.\n\n"
+            f"{profile}\n\n{reward}\n\n{risk}\n\n{closing}"
+        )
 
     def get_prompt_messages(self):
         return [
             {
                 "role": "user",
                 "content": (
-                    "Please use the pressing profile enclosed with ``` to give a concise "
-                    "4-sentence briefing of this team's pressing style. "
-                    "The profile is organised into Strengths, Neutral, and Weaknesses sections. "
-                    "Sentence 1: describe the team's pressing identity — how and where they press. "
-                    "Sentence 2: describe what the press does well, using the Strengths section. "
-                    "Sentence 3: describe where the press is limited or vulnerable, using the Weaknesses section. "
-                    "If there are no weaknesses, describe which areas are merely average rather than inventing problems. "
-                    "Sentence 4: summarise the overall trade-off this pressing approach makes. "
-                    "Rules: do not invent consequences not supported by the data "
+                    "Rewrite the pressing briefing enclosed with ``` as a coach "
+                    "would deliver it to their staff, in three tight paragraphs "
+                    "of one to two sentences each, followed by a single closing "
+                    "sentence. Keep the total length under 120 words. Avoid "
+                    "repeating the same observation across paragraphs. "
+                    "Preserve all factual content and do not add any claim not "
+                    "already in the text. "
+                    "Use connectives — 'and', 'while', 'however', 'meanwhile', "
+                    "'yet', 'although' — so each paragraph reads as a single "
+                    "analytical thought rather than a list of separate sentences. "
+                    "Do not add metric names, percentages, ranks, or level labels "
+                    "(outstanding, excellent, good, average, below average, poor). "
+                    "Do not invent consequences not supported by the text "
                     "(e.g. rapid restarts, transition speed, possession recycling). "
-                    "Do not use metric names, level labels (outstanding, excellent, good, average, "
-                    "below average, poor), or parenthetical references. "
-                    "Write as a tactical analyst briefing coaching staff."
+                    "Write as a tactical analyst briefing coaching staff in British English."
                 ),
             },
             {
