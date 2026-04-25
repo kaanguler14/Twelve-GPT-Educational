@@ -540,6 +540,68 @@ class PlayerChat(Chat):
 
 
 class PressingChat(Chat):
+    tools = [
+        {
+            "type": "function",
+            "name": "get_team_pressing_summary",
+            "description": (
+                "Returns a data-grounded summary of the selected team's pressing style, "
+                "strengths and weaknesses. Use when the user asks about how the selected "
+                "team presses, their identity, or what they are good or bad at."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+        {
+            "type": "function",
+            "name": "search_pressing_knowledge",
+            "description": (
+                "Searches a curated Q&A corpus for tactical pressing concepts and metric "
+                "definitions. Use for general questions about pressing terminology "
+                "(e.g. 'what is PPDA', 'what is a pressing chain') rather than questions "
+                "about a specific team."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The pressing concept or term to look up.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "compare_team_pressing",
+            "description": (
+                "Compares the selected team to another named Premier League team across "
+                "all pressing metrics. Use when the user names a specific rival team for "
+                "head-to-head comparison."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "other_team": {
+                        "type": "string",
+                        "description": "The rival team name to compare against.",
+                    },
+                },
+                "required": ["other_team"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "get_league_rankings",
+            "description": (
+                "Returns the selected team's rank (out of 20) across all pressing metrics. "
+                "Use when the user asks where the team stands in the league, about their "
+                "ranking, or whether they are top/bottom in something."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    ]
+
     def __init__(self, chat_state_hash, team, pressing, state="empty"):
         self.embeddings = PressingEmbeddings()
         self.team = team
@@ -559,23 +621,297 @@ class PressingChat(Chat):
             self.handle_input(x, temperature=0.3, stream=True)
 
     def instruction_messages(self):
+        if USE_GEMINI or USE_LM_STUDIO:
+            # Non-OpenAI providers fall back to the get_relevant_info() path,
+            # so they need a self-contained instruction in the legacy shape.
+            return [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a tactical data analyst embedded in a Premier League "
+                        "coaching staff. Your language is direct and action-oriented. "
+                        "You write in British English and refer to the sport as football."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "After these messages you will be interacting with a user of a football "
+                        "analytics platform. "
+                        f"The user has selected the team {self.team.name}, and the conversation "
+                        "will be about their pressing. "
+                        "You will receive relevant information to answer a user's questions and "
+                        "then be asked to provide a response. "
+                        "All user messages will be prefixed with 'User:' and enclosed with ```. "
+                        "When responding to the user, speak directly to them. "
+                        "Use the information provided before the query to provide 2 sentence answers. "
+                        "Do not deviate from this information or provide additional information "
+                        "that is not in the text returned by the functions."
+                    ),
+                },
+            ]
         return [
-            {"role": "system", "content": "You are a tactical data analyst embedded in a Premier League coaching staff. Your language is direct and action-oriented. You write in British English and refer to the sport as football."},
             {
-                "role": "user",
+                "role": "system",
                 "content": (
-                    "After these messages you will be interacting with a user of a football analytics platform. "
-                    f"The user has selected the team {self.team.name}, and the conversation will be about their pressing. "
-                    "You will receive relevant information to answer a user's questions and then be asked to provide a response. "
-                    "All user messages will be prefixed with 'User:' and enclosed with ```. "
-                    "When responding to the user, speak directly to them. "
-                    "Use the information provided before the query to provide 2 sentence answers. "
-                    "Do not deviate from this information or provide additional information that is not in the text returned by the functions."
+                    "You are a tactical data analyst embedded in a Premier League coaching staff. "
+                    "You write in British English, refer to the sport as football, and speak "
+                    "directly to the coach in a concise, action-oriented voice. "
+                    f"The user has selected the team {self.team.name}; all tools are scoped to "
+                    "this team. "
+                    "Pick exactly one tool per user message based on the question type: "
+                    "use get_team_pressing_summary for the selected team's style, strengths or "
+                    "weaknesses; "
+                    "use search_pressing_knowledge for tactical concept definitions or metric "
+                    "explanations; "
+                    "use compare_team_pressing when the user names a specific rival team; "
+                    "use get_league_rankings when the user asks about league position or rank. "
+                    "If the user asks about a different team than the selected one, do not call "
+                    f"any tool — remind them they need to switch the team from the sidebar "
+                    f"(currently {self.team.name}). "
+                    "If the question is off-topic (other sports, politics, anything not about "
+                    "Premier League pressing), do not call any tool — politely decline and "
+                    "refocus on pressing analysis. "
+                    "Once a tool returns, write a concise 2-3 sentence answer grounded only in "
+                    "the data the tool returned. Do not invent metrics or numbers."
                 ),
-            },
+            }
         ]
 
+    def _get_team_summary(self):
+        return PressingDescription(self.team).synthesize_text()
+
+    def _search_knowledge(self, query):
+        if self.embeddings.df_dict is None or self.embeddings.df_dict.empty:
+            return "Knowledge corpus is empty."
+        results = self.embeddings.search(query, top_n=3)
+        if results.empty:
+            return "No relevant entries found in the pressing knowledge corpus."
+        return "\n\n".join(results["assistant"].astype(str).to_list())
+
+    def _compare_team(self, other_team):
+        from rapidfuzz import process, fuzz
+
+        team_names = self.pressing.df["Team"].astype(str).tolist()
+        match = process.extractOne(
+            other_team, team_names, scorer=fuzz.WRatio, score_cutoff=60
+        )
+        if match is None:
+            return (
+                f"No team matching '{other_team}' was found in the league dataset. "
+                f"Available teams: {', '.join(team_names)}."
+            )
+        matched_name = match[0]
+        if matched_name == self.team.name:
+            return (
+                f"The user named '{other_team}', which resolves to the currently selected "
+                f"team ({self.team.name}). No comparison to perform."
+            )
+
+        df = self.pressing.df
+        self_row = df[df["Team"] == self.team.name].iloc[0]
+        other_row = df[df["Team"] == matched_name].iloc[0]
+
+        labels = PressingDescription.METRIC_LABELS
+        metrics = self.team.relevant_metrics
+
+        header = f"{'metric':<48}| {self.team.name:<14}| {matched_name:<14}| better"
+        lines = [header, "-" * len(header)]
+        for m in metrics:
+            self_raw = float(self_row[m])
+            other_raw = float(other_row[m])
+            self_z = float(self_row[m + "_Z"])
+            other_z = float(other_row[m + "_Z"])
+            # _Z values are already sign-flipped for negative metrics, so higher = better.
+            if abs(self_z - other_z) < 0.05:
+                better = "≈ even"
+            elif self_z > other_z:
+                better = self.team.name
+            else:
+                better = matched_name
+            label = labels.get(m, m)
+            lines.append(
+                f"{label:<48}| {self_raw:<14.3f}| {other_raw:<14.3f}| {better}"
+            )
+        return "\n".join(lines)
+
+    def _get_rankings(self):
+        df = self.pressing.df
+        team_row = df[df["Team"] == self.team.name].iloc[0]
+        labels = PressingDescription.METRIC_LABELS
+        total = len(df)
+        lines = [f"Rankings for {self.team.name} (out of {total} teams):"]
+        for m in self.team.relevant_metrics:
+            rank_col = m + "_Ranks"
+            if rank_col not in df.columns:
+                continue
+            rank = int(team_row[rank_col])
+            label = labels.get(m, m)
+            lines.append(f"- {label}: {rank} / {total}")
+        return "\n".join(lines)
+
+    def handle_input(self, input, reasoning_effort=None, temperature=0.3, stream=False):
+        if USE_GEMINI or USE_LM_STUDIO:
+            super().handle_input(
+                input,
+                reasoning_effort=reasoning_effort,
+                temperature=temperature,
+                stream=stream,
+            )
+            return
+
+        # OpenAI function-calling path (mirrors PlayerChat.handle_input).
+        messages = self.instruction_messages()
+        messages = messages + self.messages_to_display.copy()
+        messages = [m for m in messages if isinstance(m["content"], str)]
+        messages.append({"role": "user", "content": f"```User: {input}```"})
+
+        self.messages_to_display.append({"role": "user", "content": input})
+
+        client = OpenAI(api_key=GPT_KEY, base_url=GPT_BASE)
+
+        # Call 1: routing pass — model picks one tool, or none.
+        r1 = client.responses.create(
+            model=GPT_CHAT_MODEL,
+            input=messages,
+            tools=self.tools,
+            tool_choice="auto",
+        )
+        fc = next((item for item in r1.output if item.type == "function_call"), None)
+
+        if fc is None:
+            # No tool fired — model declined or chose to answer directly.
+            st.expander("Chat transcript", expanded=False).write(
+                [
+                    {"role": m.get("role"), "content": m.get("content", "")}
+                    for m in messages
+                    if isinstance(m, dict)
+                ]
+            )
+            self.messages_to_display.append(
+                {"role": "assistant", "content": r1.output_text}
+            )
+            return
+
+        if fc.name == "get_team_pressing_summary":
+            result = self._get_team_summary()
+        elif fc.name == "search_pressing_knowledge":
+            result = self._search_knowledge(json.loads(fc.arguments)["query"])
+        elif fc.name == "compare_team_pressing":
+            result = self._compare_team(json.loads(fc.arguments)["other_team"])
+        elif fc.name == "get_league_rankings":
+            result = self._get_rankings()
+        else:
+            result = f"Unknown tool: {fc.name}"
+
+        # Call 2: answer pass — model writes the final reply, no more tools.
+        tool_inputs = (
+            list(messages)
+            + list(r1.output)
+            + [
+                {
+                    "type": "function_call_output",
+                    "call_id": fc.call_id,
+                    "output": result,
+                }
+            ]
+        )
+
+        formatted = []
+        for item in tool_inputs:
+            if isinstance(item, dict):
+                if item.get("type") == "function_call_output":
+                    formatted.append(
+                        {
+                            "tool_result": item["output"] or "(empty)",
+                            "call_id": item["call_id"],
+                        }
+                    )
+                else:
+                    formatted.append(
+                        {"role": item.get("role"), "content": item.get("content", "")}
+                    )
+            elif hasattr(item, "type"):
+                if item.type == "function_call":
+                    formatted.append(
+                        {"tool_call": item.name, "arguments": json.loads(item.arguments)}
+                    )
+        st.expander("Chat transcript", expanded=False).write(formatted)
+
+        if stream:
+            if GPT_SUPPORTS_REASONING:
+                reasoning_effort = (
+                    reasoning_effort
+                    if reasoning_effort in GPT_AVAILABLE_REASONING_EFFORTS
+                    else GPT_AVAILABLE_REASONING_EFFORTS[0]
+                )
+                response_stream = client.responses.create(
+                    model=GPT_CHAT_MODEL,
+                    input=tool_inputs,
+                    tool_choice="none",
+                    tools=self.tools,
+                    reasoning={"effort": reasoning_effort},
+                    stream=True,
+                )
+            elif GPT_SUPPORTS_TEMPERATURE:
+                response_stream = client.responses.create(
+                    model=GPT_CHAT_MODEL,
+                    input=tool_inputs,
+                    tool_choice="none",
+                    tools=self.tools,
+                    temperature=temperature,
+                    stream=True,
+                )
+            else:
+                response_stream = client.responses.create(
+                    model=GPT_CHAT_MODEL,
+                    input=tool_inputs,
+                    tool_choice="none",
+                    tools=self.tools,
+                    stream=True,
+                )
+
+            def streamed_chunks():
+                for event in response_stream:
+                    if event.type == "response.output_text.delta":
+                        yield event.delta
+
+            answer = streamed_chunks()
+        else:
+            if GPT_SUPPORTS_REASONING:
+                reasoning_effort = (
+                    reasoning_effort
+                    if reasoning_effort in GPT_AVAILABLE_REASONING_EFFORTS
+                    else GPT_AVAILABLE_REASONING_EFFORTS[0]
+                )
+                response = client.responses.create(
+                    model=GPT_CHAT_MODEL,
+                    input=tool_inputs,
+                    tool_choice="none",
+                    tools=self.tools,
+                    reasoning={"effort": reasoning_effort},
+                )
+            elif GPT_SUPPORTS_TEMPERATURE:
+                response = client.responses.create(
+                    model=GPT_CHAT_MODEL,
+                    input=tool_inputs,
+                    tool_choice="none",
+                    tools=self.tools,
+                    temperature=temperature,
+                )
+            else:
+                response = client.responses.create(
+                    model=GPT_CHAT_MODEL,
+                    input=tool_inputs,
+                    tool_choice="none",
+                    tools=self.tools,
+                )
+            answer = response.output_text
+
+        self.messages_to_display.append({"role": "assistant", "content": answer})
+
     def get_relevant_info(self, query):
+        # Used only by the Gemini / LM Studio fallback path via super().handle_input.
         ret_val = "Here is a description of the team in terms of pressing data: \n\n"
         if not hasattr(self, "_cached_synth_text"):
             self._cached_synth_text = PressingDescription(self.team).synthesized_text
