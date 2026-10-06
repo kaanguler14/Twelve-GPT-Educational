@@ -5,7 +5,7 @@ from types import GeneratorType
 import pandas as pd
 import json
 
-from settings import USE_GEMINI, USE_LM_STUDIO
+from settings import USE_GEMINI, USE_LM_STUDIO, MAX_QUESTIONS_PER_SESSION
 
 if USE_GEMINI:
     from settings import GEMINI_API_KEY, GEMINI_CHAT_MODEL
@@ -37,7 +37,7 @@ from classes.embeddings import (
 from classes.visual import Visual, DistributionPlot, DistributionPlotPersonality
 
 import utils.sentences as sentences
-from utils.gemini import convert_messages_format
+from utils.gemini import gemini_chat, gemini_tool_chat
 from utils.text import clean_mojibake
 
 
@@ -138,23 +138,17 @@ class Chat:
 
         # Check if use gemini is set to true
         if USE_GEMINI:
-            import google.generativeai as genai
-
-            converted_msgs = convert_messages_format(messages)
-
-            # # save converted messages to json
-            # with open("data/wvs/msgs_1.json", "w") as f:
-            #     json.dump(converted_msgs, f)
-
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel(
-                model_name=GEMINI_CHAT_MODEL,
-                system_instruction=converted_msgs["system_instruction"],
+            answer = gemini_chat(
+                messages,
+                GEMINI_API_KEY,
+                GEMINI_CHAT_MODEL,
+                temperature=temperature,
+                stream=stream,
             )
-            chat = model.start_chat(history=converted_msgs["history"])
-            response = chat.send_message(content=converted_msgs["content"])
-
-            answer = clean_mojibake(response.text)
+            if stream:
+                answer = (clean_mojibake(chunk) for chunk in answer)
+            else:
+                answer = clean_mojibake(answer)
         elif USE_LM_STUDIO:
             client = OpenAI(api_key=LM_STUDIO_API_KEY, base_url=LM_STUDIO_API_BASE)
             if stream:
@@ -239,6 +233,54 @@ class Chat:
 
         # Add the returned value to the messages.
         self.messages_to_display.append(message)
+
+    def allow_question(self):
+        """
+        Enforces MAX_QUESTIONS_PER_SESSION so a public deployment cannot exhaust the API quota.
+        """
+        if not MAX_QUESTIONS_PER_SESSION:
+            return True
+        asked = st.session_state.get("questions_asked", 0)
+        if asked >= MAX_QUESTIONS_PER_SESSION:
+            st.warning(
+                f"This demo allows {MAX_QUESTIONS_PER_SESSION} questions per session "
+                "to stay within its API quota. Thanks for trying it out!"
+            )
+            return False
+        st.session_state.questions_asked = asked + 1
+        return True
+
+    def _run_tool(self, name, args):
+        """
+        Executes a tool picked by the model. Overridden by subclasses that define tools.
+        """
+        return f"Unknown tool: {name}"
+
+    def handle_input_gemini_tools(self, input, temperature=1, stream=False):
+        """
+        Gemini function-calling path, mirroring the OpenAI path in the subclasses.
+        """
+        messages = self.instruction_messages()
+        messages = messages + self.messages_to_display.copy()
+        messages = [m for m in messages if isinstance(m["content"], str)]
+        messages.append({"role": "user", "content": f"```User: {input}```"})
+
+        self.messages_to_display.append({"role": "user", "content": input})
+
+        answer, transcript = gemini_tool_chat(
+            messages,
+            self.tools,
+            self._run_tool,
+            GEMINI_API_KEY,
+            GEMINI_CHAT_MODEL,
+            temperature=temperature,
+            stream=stream,
+        )
+        st.expander("Chat transcript", expanded=False).write(transcript)
+
+        if isinstance(answer, str):
+            answer = clean_mojibake(answer)
+        self.messages_to_display.append({"role": "assistant", "content": answer})
 
     def display_content(self, content):
         """
@@ -342,6 +384,11 @@ class PlayerChat(Chat):
         results = self.embeddings.search(query, top_n=5)
         return "\n".join(results["assistant"].to_list())
 
+    def _run_tool(self, name, args):
+        if name == "get_player_summary":
+            return self._get_player_summary()
+        return self._search_knowledge(args["query"])
+
     def get_input(self):
         """
         Get input from streamlit."""
@@ -354,13 +401,14 @@ class PlayerChat(Chat):
                     f"Your message is too long ({len(x)} characters). Please keep it under 500 characters."
                 )
 
-            self.handle_input(x, stream=True)
+            if self.allow_question():
+                self.handle_input(x, stream=True)
 
     def instruction_messages(self):
         """
         Instruction for the agent.
         """
-        if USE_GEMINI or USE_LM_STUDIO:
+        if USE_LM_STUDIO:
             first_messages = [
             {"role": "system", "content": "You are a UK-based football scout."},
             {
@@ -399,8 +447,11 @@ class PlayerChat(Chat):
             ]
 
     def handle_input(self, input, reasoning_effort=None, temperature=1, stream=False):
-        if USE_GEMINI or USE_LM_STUDIO:
+        if USE_LM_STUDIO:
             super().handle_input(input, reasoning_effort=reasoning_effort, temperature=temperature, stream=stream)
+            return
+        if USE_GEMINI:
+            self.handle_input_gemini_tools(input, temperature=temperature, stream=stream)
             return
         # OpenAI function-calling path
         messages = self.instruction_messages()
@@ -429,10 +480,7 @@ class PlayerChat(Chat):
             self.messages_to_display.append({"role": "assistant", "content": r1.output_text})
             return
 
-        if fc.name == "get_player_summary":
-            result = self._get_player_summary()
-        else:
-            result = self._search_knowledge(json.loads(fc.arguments)["query"])
+        result = self._run_tool(fc.name, json.loads(fc.arguments) if fc.arguments else {})
 
         # Call 2: final answer, no more tools
         tool_inputs = list(messages) + list(r1.output) + [
@@ -517,7 +565,7 @@ class PlayerChat(Chat):
         self.messages_to_display.append({"role": "assistant", "content": answer})
 
     def get_relevant_info(self, query):
-        # Used by the Gemini/LM Studio path via super().handle_input
+        # Used by the LM Studio path via super().handle_input
 
         # If there is no query then use the last message from the user
         if query == "":
@@ -600,6 +648,53 @@ class PressingChat(Chat):
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
+        {
+            "type": "function",
+            "name": "get_season_pressing_trend",
+            "description": (
+                "Renders a chart of the selected team's pressing performance match-by-match "
+                "across the season. Use when the user asks how the press evolved over the "
+                "season, week-by-week, across the campaign, or whether the press got "
+                "better or worse over time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "metric": {
+                        "type": "string",
+                        "description": (
+                            "Optional pressing proxy metric to plot. All metrics are "
+                            "restricted to chains starting in the opposition half "
+                            "(high-press lens). If omitted, plots a composite press "
+                            "strength score (the mean of the five metrics' z-scores). "
+                            "Allowed values: chains, regains, "
+                            "regain_rate, chain_length_avg, lead_to_shot_count."
+                        ),
+                    },
+                },
+                "required": [],
+            },
+        },
+        {
+            "type": "function",
+            "name": "get_intra_match_pressing",
+            "description": (
+                "Renders a chart of how the selected team's pressing intensity evolved "
+                "within a single match using 5-minute buckets. Use when the user asks "
+                "about pressing change during a match, first-half vs second-half "
+                "intensity, fatigue effects, or 'show me match X'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "match_id": {
+                        "type": "integer",
+                        "description": "Optional match id. If omitted, uses the team's most recent match.",
+                    },
+                },
+                "required": [],
+            },
+        },
     ]
 
     def __init__(self, chat_state_hash, team, pressing, state="empty"):
@@ -618,11 +713,12 @@ class PressingChat(Chat):
                 )
                 return
 
-            self.handle_input(x, temperature=0.3, stream=True)
+            if self.allow_question():
+                self.handle_input(x, temperature=0.3, stream=True)
 
     def instruction_messages(self):
-        if USE_GEMINI or USE_LM_STUDIO:
-            # Non-OpenAI providers fall back to the get_relevant_info() path,
+        if USE_LM_STUDIO:
+            # LM Studio falls back to the get_relevant_info() path,
             # so they need a self-contained instruction in the legacy shape.
             return [
                 {
@@ -665,7 +761,11 @@ class PressingChat(Chat):
                     "use search_pressing_knowledge for tactical concept definitions or metric "
                     "explanations; "
                     "use compare_team_pressing when the user names a specific rival team; "
-                    "use get_league_rankings when the user asks about league position or rank. "
+                    "use get_league_rankings when the user asks about league position or rank; "
+                    "use get_season_pressing_trend when the user asks how the press evolved across "
+                    "the season, week-by-week, or wants a season-long chart; "
+                    "use get_intra_match_pressing when the user asks how pressing changed within a "
+                    "single match, about fatigue, halves, or wants a match-level chart. "
                     "If the user asks about a different team than the selected one, do not call "
                     f"any tool — remind them they need to switch the team from the sidebar "
                     f"(currently {self.team.name}). "
@@ -715,9 +815,19 @@ class PressingChat(Chat):
         labels = PressingDescription.METRIC_LABELS
         metrics = self.team.relevant_metrics
 
-        header = f"{'metric':<48}| {self.team.name:<14}| {matched_name:<14}| better"
+        # The direction column stops the model reading a higher raw value as
+        # better on metrics where lower is better (e.g. Press Break Rate).
+        header = (
+            f"{'metric':<48}| {'direction':<17}| {self.team.name:<14}| "
+            f"{matched_name:<14}| better"
+        )
         lines = [header, "-" * len(header)]
         for m in metrics:
+            direction = (
+                "lower is better"
+                if m in self.pressing.negative_metrics
+                else "higher is better"
+            )
             self_raw = float(self_row[m])
             other_raw = float(other_row[m])
             self_z = float(self_row[m + "_Z"])
@@ -731,7 +841,8 @@ class PressingChat(Chat):
                 better = matched_name
             label = labels.get(m, m)
             lines.append(
-                f"{label:<48}| {self_raw:<14.3f}| {other_raw:<14.3f}| {better}"
+                f"{label:<48}| {direction:<17}| {self_raw:<14.3f}| "
+                f"{other_raw:<14.3f}| {better}"
             )
         return "\n".join(lines)
 
@@ -742,22 +853,121 @@ class PressingChat(Chat):
         total = len(df)
         lines = [f"Rankings for {self.team.name} (out of {total} teams):"]
         for m in self.team.relevant_metrics:
-            rank_col = m + "_Ranks"
-            if rank_col not in df.columns:
+            if m + "_Ranks" not in df.columns:
                 continue
-            rank = int(team_row[rank_col])
+            # Competition ranking ("1224"): tied teams share the best position.
+            ascending = m in self.pressing.negative_metrics
+            rank = int(df[m].rank(method="min", ascending=ascending)[team_row.name])
+            tied = (df[m] == team_row[m]).sum() > 1
             label = labels.get(m, m)
-            lines.append(f"- {label}: {rank} / {total}")
+            lines.append(f"- {label}: {rank} / {total}{' (joint)' if tied else ''}")
         return "\n".join(lines)
 
+    def _get_season_trend(self, metric=None):
+        from classes.pressing_timeseries import PressingTimeSeries, METRIC_DEFS
+        from classes.visual import PressingTimeSeriesPlot
+
+        ts = PressingTimeSeries()
+        try:
+            df = ts.season_trend(self.team.name, metric=metric)
+        except ValueError as e:
+            return str(e)
+        if df.empty:
+            return f"No season pressing data found for {self.team.name}."
+
+        if metric is None:
+            metric_label = "Composite Press Strength (mean z-score)"
+        else:
+            metric_label = METRIC_DEFS[metric][0]
+
+        plot = PressingTimeSeriesPlot()
+        plot.add_season_line(df, self.team.name, metric_label)
+        self.add_message(plot)
+
+        best_idx = df["value_z"].idxmax()
+        worst_idx = df["value_z"].idxmin()
+        best = df.loc[best_idx]
+        worst = df.loc[worst_idx]
+        scheduled = ts.scheduled_match_count(self.team.name)
+        missing = scheduled - len(df)
+        missing_note = (
+            f" ({missing} of {scheduled} matches missing from the event dataset)"
+            if missing > 0
+            else ""
+        )
+        return (
+            f"{self.team.name} season pressing trend ({metric_label}):\n"
+            f"- Matches plotted: {len(df)}{missing_note}\n"
+            f"- Strongest pressing performance: vs {best['opponent']} on "
+            f"{best['date'].strftime('%Y-%m-%d')} (value={best['value']:.2f}, z={best['value_z']:+.2f})\n"
+            f"- Weakest pressing performance: vs {worst['opponent']} on "
+            f"{worst['date'].strftime('%Y-%m-%d')} (value={worst['value']:.2f}, z={worst['value_z']:+.2f})\n"
+            f"- Season mean: {df['value'].mean():.2f}, std: {df['value'].std():.2f}"
+        )
+
+    def _get_intra_match(self, match_id=None):
+        from classes.pressing_timeseries import PressingTimeSeries
+        from classes.visual import PressingTimeSeriesPlot
+
+        ts = PressingTimeSeries()
+        if match_id is None:
+            match_id = ts.latest_match_id(self.team.name)
+            if match_id is None:
+                return f"No matches found for {self.team.name}."
+
+        df = ts.intra_match(self.team.name, match_id=match_id)
+        match_label = ts.match_label(self.team.name, match_id)
+
+        if df.empty:
+            return f"No pressing data found for {self.team.name} in {match_label}."
+
+        plot = PressingTimeSeriesPlot()
+        plot.add_intra_match_line(df, self.team.name, match_label, "Pressing chains per 5 min")
+        self.add_message(plot)
+
+        first_half, second_half = ts.half_split(self.team.name, match_id)
+        peak_value = int(df["value"].max())
+        peak_buckets = df.loc[df["value"] == peak_value, "bucket"].astype(int)
+        peak_windows = ", ".join(f"minute {b}–{b + 5}" for b in peak_buckets)
+        each = " each" if len(peak_buckets) > 1 else ""
+        return (
+            f"{self.team.name} intra-match pressing ({match_label}):\n"
+            f"- Total pressing chains: {int(df['value'].sum())}\n"
+            f"- First half (incl. stoppage time): {first_half} chains\n"
+            f"- Second half (incl. stoppage time): {second_half} chains\n"
+            f"- Peak window(s): {peak_windows} with {peak_value} chains{each}"
+        )
+
+    def _run_tool(self, name, args):
+        if name == "get_team_pressing_summary":
+            return self._get_team_summary()
+        if name == "search_pressing_knowledge":
+            return self._search_knowledge(args["query"])
+        if name == "compare_team_pressing":
+            return self._compare_team(args["other_team"])
+        if name == "get_league_rankings":
+            return self._get_rankings()
+        if name == "get_season_pressing_trend":
+            return self._get_season_trend(metric=args.get("metric"))
+        if name == "get_intra_match_pressing":
+            match_id = args.get("match_id")
+            # Gemini returns all numbers as floats.
+            return self._get_intra_match(
+                match_id=int(match_id) if match_id is not None else None
+            )
+        return f"Unknown tool: {name}"
+
     def handle_input(self, input, reasoning_effort=None, temperature=0.3, stream=False):
-        if USE_GEMINI or USE_LM_STUDIO:
+        if USE_LM_STUDIO:
             super().handle_input(
                 input,
                 reasoning_effort=reasoning_effort,
                 temperature=temperature,
                 stream=stream,
             )
+            return
+        if USE_GEMINI:
+            self.handle_input_gemini_tools(input, temperature=temperature, stream=stream)
             return
 
         # OpenAI function-calling path (mirrors PlayerChat.handle_input).
@@ -793,16 +1003,7 @@ class PressingChat(Chat):
             )
             return
 
-        if fc.name == "get_team_pressing_summary":
-            result = self._get_team_summary()
-        elif fc.name == "search_pressing_knowledge":
-            result = self._search_knowledge(json.loads(fc.arguments)["query"])
-        elif fc.name == "compare_team_pressing":
-            result = self._compare_team(json.loads(fc.arguments)["other_team"])
-        elif fc.name == "get_league_rankings":
-            result = self._get_rankings()
-        else:
-            result = f"Unknown tool: {fc.name}"
+        result = self._run_tool(fc.name, json.loads(fc.arguments) if fc.arguments else {})
 
         # Call 2: answer pass — model writes the final reply, no more tools.
         tool_inputs = (
@@ -911,7 +1112,7 @@ class PressingChat(Chat):
         self.messages_to_display.append({"role": "assistant", "content": answer})
 
     def get_relevant_info(self, query):
-        # Used only by the Gemini / LM Studio fallback path via super().handle_input.
+        # Used only by the LM Studio fallback path via super().handle_input.
         ret_val = "Here is a description of the team in terms of pressing data: \n\n"
         if not hasattr(self, "_cached_synth_text"):
             self._cached_synth_text = PressingDescription(self.team).synthesized_text
@@ -960,7 +1161,8 @@ class WVSChat(Chat):
                     f"Your message is too long ({len(x)} characters). Please keep it under 500 characters."
                 )
 
-            self.handle_input(x, stream=True)
+            if self.allow_question():
+                self.handle_input(x, stream=True)
 
     def instruction_messages(self):
         """
@@ -1069,4 +1271,5 @@ class PersonChat(Chat):
                     f"Your message is too long ({len(x)} characters). Please keep it under 500 characters."
                 )
 
-            self.handle_input(x, stream=True)
+            if self.allow_question():
+                self.handle_input(x, stream=True)

@@ -7,7 +7,7 @@ from openai import OpenAI
 
 
 import utils.sentences as sentences
-from utils.gemini import convert_messages_format
+from utils.gemini import gemini_chat
 from utils.text import clean_mojibake
 
 from classes.data_point import Player, Country, Person, PressingTeam
@@ -195,23 +195,17 @@ class Description(ABC):
         st.session_state["description_transcript"] = self.messages
 
         if USE_GEMINI:
-            import google.generativeai as genai
-
-            converted_msgs = convert_messages_format(self.messages)
-
-            # # save converted messages to json
-            # with open("data/wvs/msgs_0.json", "w") as f:
-            #     json.dump(converted_msgs, f)
-
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel(
-                model_name=GEMINI_CHAT_MODEL,
-                system_instruction=converted_msgs["system_instruction"],
+            answer = gemini_chat(
+                self.messages,
+                GEMINI_API_KEY,
+                GEMINI_CHAT_MODEL,
+                temperature=temperature,
+                stream=stream,
             )
-            chat = model.start_chat(history=converted_msgs["history"])
-            response = chat.send_message(content=converted_msgs["content"])
-
-            answer = clean_mojibake(response.text)
+            if stream:
+                answer = (clean_mojibake(chunk) for chunk in answer)
+            else:
+                answer = clean_mojibake(answer)
         elif USE_LM_STUDIO:
             client = OpenAI(api_key=LM_STUDIO_API_KEY, base_url=LM_STUDIO_API_BASE)
             if stream:

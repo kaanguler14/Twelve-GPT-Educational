@@ -9,6 +9,7 @@ from classes.chat import PressingChat
 from classes.data_source import PressingStats
 from classes.description import PressingDescription
 from classes.visual import DistributionPlot
+from utils.gemini import QUOTA_MESSAGE
 from utils.page_components import add_common_page_elements
 from utils.utils import create_chat, select_team
 
@@ -30,6 +31,14 @@ DETAILED_NEGATIVE_METRICS = [
     "pass_accuracy_under_pressure",
     "line_breaking_pass_rate_under_pressure",
 ]
+
+
+
+@st.cache_resource
+def briefing_cache():
+    """Briefings shared across sessions: one LLM call per team instead of per visit."""
+    return {}
+
 
 sidebar_container = add_common_page_elements()
 st.sidebar.container()
@@ -102,7 +111,15 @@ if chat.state == "empty":
     visual.add_player(team, len(detailed_pressing.df), metrics=detailed_metrics)
 
     description = PressingDescription(team)
-    summary = description.stream_gpt(stream=True, temperature=0.3)
+    # Keyed on the synthesized text so a change in data or wording regenerates it.
+    cache_key = (team.name, description.synthesized_text)
+    cache = briefing_cache()
+    if cache_key in cache:
+        summary = cache[cache_key]
+    else:
+        summary = description.stream_gpt(stream=False, temperature=0.3)
+        if summary != QUOTA_MESSAGE:
+            cache[cache_key] = summary
 
     chat.add_message(visual)
     chat.add_message(summary)
