@@ -2,7 +2,8 @@
 
 ## Commands
 - Run app: `streamlit run app.py`
-- Embeddings rebuild: `python -m utils.build_embeddings`
+- Embeddings rebuild: use the Embedder page (`pages/embedder.py`)
+- Pressing time-series aggregates export (needs the raw SkillCorner cache at `PRESSING_DATASET_PATH`): `python -m classes.pressing_timeseries`
 
 ## Design Decisions
 - `PressingDescription.synthesize_text()` produces a narrative (profile → reward → risk → closing) rather than listed strengths/neutral/weaknesses. Metric values and ranks are not surfaced — only the consequence sentence from `METRIC_CONSEQUENCES` is used.

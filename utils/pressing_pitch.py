@@ -12,8 +12,10 @@ import matplotlib.patches as patches
 from matplotlib.patches import Arc, FancyArrowPatch
 import streamlit as st
 
+from settings import PRESSING_DATASET_PATH
+
 # ── Config ────────────────────────────────────────────────────────────────────
-DATASET_PATH = "dataset/dynamic_events_pl_24/_pressing_cache.parquet"
+DATASET_PATH = f"{PRESSING_DATASET_PATH}/_pressing_cache.parquet"
 
 HALF_LEN = 52.5
 HALF_WID = 34.0

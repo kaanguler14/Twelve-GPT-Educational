@@ -633,10 +633,148 @@ class DistributionPlotPersonality(Visual):
         data_r = data_p.to_list()  
         labels = ['Extraversion', 'Neuroticism', 'Agreeableness', 'Conscientiousness', 'Openness']
         df = pd.DataFrame({'data': data_r,'label': labels})
-    
+
         # Create the radar plot
         fig = px.line_polar(df, r='data', theta='label', line_close=True, markers=True)
         fig.update_layout(polar=dict(radialaxis=dict(visible=True,range=[0, 40])),showlegend=True, title= 'Candidate profile')
         fig.update_traces(fill='toself', marker=dict(size=5))
         # Display the plot in Streamlit
         st.plotly_chart(fig)"""
+
+
+class PressingTimeSeriesPlot(Visual):
+    """
+    Line chart for season-long or intra-match pressing trends. The chart is
+    rendered in the chat as a `Visual` message via the existing Chat
+    infrastructure (chat.py:251), so it appears alongside the LLM's prose.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fig.update_layout(height=400)
+
+    def add_definition_note(self):
+        # The page's distribution chart uses the classical metric definitions
+        # (pressing_detailed_metrics.csv); these charts use the broad live event
+        # definition, so absolute values are not comparable between the two.
+        self.fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0,
+            xanchor="left",
+            y=-0.32,
+            yanchor="top",
+            text=(
+                "Broad live definition; absolute values differ from the distribution "
+                "chart above (which uses classical metric definitions)."
+            ),
+            showarrow=False,
+            font={
+                "color": rgb_to_color(self.white, 0.5),
+                "family": "Gilroy-Light",
+                "size": 10 * self.font_size_multiplier,
+            },
+        )
+        self.fig.update_layout(margin=dict(b=100))
+
+    def add_season_line(self, df, team_name, metric_label):
+        # df columns: match_id, date, opponent, value, value_z
+        x = list(range(1, len(df) + 1))
+        hover = [
+            f"MD {i}: {row.opponent}<br>{row.date.strftime('%Y-%m-%d')}<br>value: {row.value:.2f} (z={row.value_z:.2f})"
+            for i, row in zip(x, df.itertuples(index=False))
+        ]
+        self.fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=df["value"].tolist(),
+                mode="lines+markers",
+                name=metric_label,
+                line=dict(color=rgb_to_color(self.bright_green), width=2.5),
+                marker=dict(size=7, color=rgb_to_color(self.bright_green)),
+                hovertext=hover,
+                hoverinfo="text",
+            )
+        )
+        # Reference line at season mean
+        season_mean = float(df["value"].mean())
+        self.fig.add_hline(
+            y=season_mean,
+            line=dict(color=rgb_to_color(self.white, 0.4), dash="dash", width=1),
+            annotation_text=f"season mean: {season_mean:.2f}",
+            annotation_position="top right",
+            annotation_font=dict(color=rgb_to_color(self.white, 0.6), size=11),
+        )
+        self.fig.update_layout(
+            xaxis=dict(
+                title=dict(text="Matchday", font=dict(color=rgb_to_color(self.white))),
+                tickfont=dict(color=rgb_to_color(self.white, 0.7)),
+                showgrid=False,
+            ),
+            yaxis=dict(
+                title=dict(text=metric_label, font=dict(color=rgb_to_color(self.white))),
+                tickfont=dict(color=rgb_to_color(self.white, 0.7)),
+                gridcolor=rgb_to_color(self.white, 0.1),
+            ),
+            showlegend=False,
+        )
+        self.add_title(
+            f"{team_name} — Season Pressing Trend",
+            metric_label,
+        )
+        self.add_definition_note()
+
+    def add_intra_match_line(self, df, team_name, match_label, metric_label):
+        # df columns: bucket (minute), value
+        if df.empty:
+            self.add_title(
+                f"{team_name} — {match_label}",
+                "no pressing chains recorded for this match",
+            )
+            return
+        self.fig.add_trace(
+            go.Bar(
+                x=df["bucket"].tolist(),
+                y=df["value"].tolist(),
+                name=metric_label,
+                marker=dict(color=rgb_to_color(self.bright_green)),
+                hovertemplate="min %{x}–%{customdata}<br>" + metric_label + ": %{y}<extra></extra>",
+                customdata=[b + 5 for b in df["bucket"].tolist()],
+            )
+        )
+        # Halftime divider
+        self.fig.add_vline(
+            x=45,
+            line=dict(color=rgb_to_color(self.white, 0.5), dash="dot", width=1),
+            annotation_text="HT",
+            annotation_position="top",
+            annotation_font=dict(color=rgb_to_color(self.white, 0.7), size=11),
+        )
+        self.fig.update_layout(
+            xaxis=dict(
+                title=dict(text="Match minute", font=dict(color=rgb_to_color(self.white))),
+                tickfont=dict(color=rgb_to_color(self.white, 0.7)),
+                showgrid=False,
+                dtick=15,
+            ),
+            yaxis=dict(
+                title=dict(text=metric_label, font=dict(color=rgb_to_color(self.white))),
+                tickfont=dict(color=rgb_to_color(self.white, 0.7)),
+                gridcolor=rgb_to_color(self.white, 0.1),
+            ),
+            showlegend=False,
+            bargap=0.15,
+        )
+        self.add_title(
+            f"{team_name} — Intra-match Pressing",
+            f"{match_label} · 5-min buckets",
+        )
+        self.add_definition_note()
+
+    def show(self):
+        st.plotly_chart(
+            self.fig,
+            config={"displayModeBar": False},
+            height=400,
+            use_container_width=True,
+        )
